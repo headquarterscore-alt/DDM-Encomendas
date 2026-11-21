@@ -59,6 +59,15 @@ async function until(fn,message){for(let i=0;i<100;i++){if(await fn())return;awa
   const card=p=>p.locator(`[data-order="${id}"]`);
   await Promise.all(pages.map(p=>card(p).waitFor()));
   for(const p of pages){await p.locator('[data-act="focus"]').click();await p.locator('#search').fill(customer);}
+  for(const p of pages){
+   assert.deepEqual(await p.locator('[data-nav]').allTextContents(),['Preparação','Encomendas','Cliente']);
+   assert.ok(await p.locator('nav').isVisible(),'navigation remains available in station mode');
+   assert.equal(await p.getByText('Modo demo',{exact:true}).count(),0);
+   assert.match(await p.locator('[data-station]').first().innerText(),/POSTO 01[\s\S]*Peixe-Marisco/);
+   assert.match(await p.locator('[data-station]').last().innerText(),/POSTO 02[\s\S]*Barcas/);
+   const expected=await p.evaluate(()=>new Intl.DateTimeFormat('pt-PT',{timeZone:'Europe/Lisbon',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).format(new Date()));
+   assert.equal(await p.locator('[data-clock]').innerText(),expected);
+  }
   assert.match(await card(bancada).innerText(),new RegExp('Robalo[\\s\\S]*2,5 kg[\\s\\S]*Em filetes[\\s\\S]*Dourada[\\s\\S]*4 '+(live?'kg':'un\\.')+'[\\s\\S]*Amanhado'));
   assert.match(await card(barcas).innerText(),/19:30[\s\S]*Barca média[\s\S]*6 pessoas[\s\S]*75 × 24 cm/);
   assert.equal(await card(bancada).getByText('Barca média',{exact:true}).count(),0);
@@ -74,39 +83,52 @@ async function until(fn,message){for(let i=0;i<100;i++){if(await fn())return;awa
   await click(barcas,'Registar marisco recolhido');
   await until(async()=>!(await barcas.locator('#toast').getAttribute('class')).includes('on'),'toast cleared for screenshot');
   await bancada.locator('#search').blur();
-  mkdirSync(resolve(root,'docs/postos'),{recursive:true});
+  const imageDir=process.argv.includes('--header-images')?'docs/topo':'docs/postos';
+  mkdirSync(resolve(root,imageDir),{recursive:true});
   if(live||!process.argv.includes('--keep-images')){
-   await barcas.screenshot({path:resolve(root,'docs/postos/barcas.png'),fullPage:true});
-   await bancada.screenshot({path:resolve(root,'docs/postos/bancada.png'),fullPage:true});
+   await wait(250); // Allow the toast fade to finish before capturing evidence.
+   for(const p of pages)await p.setViewportSize({width:1673,height:1100});
+   await barcas.screenshot({path:resolve(root,imageDir,'barcas.png'),fullPage:true});
+   await bancada.screenshot({path:resolve(root,imageDir,'bancada.png'),fullPage:true});
+   for(const p of pages)await p.setViewportSize({width:1440,height:1100});
   }
   await click(barcas,'Dispensar cozedura');
   await click(barcas,'Registar montagem concluída');
   await click(barcas,'Concluir barca');
-  assert.match(await card(barcas).innerText(),/A aguardar a Bancada/);
+  assert.match(await card(barcas).innerText(),/A aguardar Peixe-Marisco/);
   await bancada.reload();await card(bancada).waitFor();
-  assert.ok(await card(bancada).getByRole('button',{name:'Iniciar bancada',exact:true}).isVisible(),'fish still pending');
+  assert.ok(await card(bancada).getByRole('button',{name:'Iniciar preparação',exact:true}).isVisible(),'fish still pending');
   assert.equal(await card(barcas).getByRole('button',{name:'Registar entrega',exact:true}).count(),0);
   assert.equal(await card(bancada).getByRole('button',{name:'Registar entrega',exact:true}).count(),0);
   // Also check the complete-order detail, not only the board.
   await card(barcas).locator('.ref').click();assert.equal(await barcas.locator('[data-task="handoff"]').count(),0);await barcas.getByRole('button',{name:'Fechar',exact:true}).click();
-  await click(bancada,'Iniciar bancada');
-  if(!live){failNext=true;await card(bancada).getByRole('button',{name:'Concluir bancada',exact:true}).click();await until(async()=>await bancada.locator('#writeStatus').innerText()==='Confirma o estado antes de tentar novamente.','failure feedback');assert.ok(await card(bancada).getByRole('button',{name:'Concluir bancada',exact:true}).isEnabled());}
-  await click(bancada,'Concluir bancada');
+  await click(bancada,'Iniciar preparação');
+  if(!live){failNext=true;await card(bancada).getByRole('button',{name:'Concluir preparação',exact:true}).click();await until(async()=>await bancada.locator('#writeStatus').innerText()==='Confirma o estado antes de tentar novamente.','failure feedback');assert.ok(await card(bancada).getByRole('button',{name:'Concluir preparação',exact:true}).isEnabled());}
+  await click(bancada,'Concluir preparação');
   await barcas.reload();await card(barcas).waitFor();
   for(const p of pages)assert.ok(await card(p).getByRole('button',{name:'Registar entrega',exact:true}).isVisible(),'handoff only after both ready');
   // Reopen root URL in fresh pages; the two contexts retain separate device preferences.
   for(let i=0;i<2;i++){
    await pages[i].close();pages[i]=await contexts[i].newPage();await pages[i].goto(url+'/');
-   await until(async()=>await pages[i].locator('h1').innerText()==='Posto · '+(i?'Bancada':'Barcas'),'device reopened correct station');
+   await until(async()=>await pages[i].locator('h1').innerText()===(i?'Peixe-Marisco':'Barcas'),'device reopened correct station');
    assert.equal(await pages[i].locator('[data-station="'+(i?'bancada':'barcas')+'"]').getAttribute('aria-pressed'),'true');
   }
   for(const p of pages){
    const heights=await p.locator('.ticket-action,.head-actions .btn,.tools .btn,.date-pick').evaluateAll(nodes=>nodes.map(n=>n.getBoundingClientRect().height));assert.ok(heights.every(h=>h>=56),JSON.stringify(heights));
   }
+  for(const width of [1673,1440,1024,768,390]){
+   await pages[0].setViewportSize({width,height:1000});
+   const layout=await pages[0].locator('.station-header').evaluate(el=>{
+    const box=el.getBoundingClientRect();const elements=[...el.querySelectorAll('h1,.header-date,.header-clock,.sync,.btn')].map(x=>x.getBoundingClientRect());
+    return {fits:elements.every(r=>r.left>=box.left&&r.right<=box.right+1),width:el.scrollWidth,client:el.clientWidth};
+   });
+   assert.ok(layout.fits&&layout.width<=layout.client+1,'header overflow at '+width+': '+JSON.stringify(layout));
+  }
+  await pages[0].setViewportSize({width:1440,height:1100});
   if(!live){
    await contexts[0].setOffline(true);await until(async()=>await pages[0].locator('.sync').innerText()==='Sem ligação','offline status');
    assert.ok(await card(pages[0]).getByRole('button',{name:'Registar entrega',exact:true}).isDisabled());
-   await contexts[0].setOffline(false);await until(async()=>await pages[0].locator('.sync').innerText()==='Base ligada','reconnected');
+   await contexts[0].setOffline(false);await until(async()=>await pages[0].locator('.sync').innerText()==='Ligado','reconnected');
    // Reopen barca and verify cooking done, as well as the skip path above.
    await card(pages[0]).locator('.ref').click();await pages[0].locator('[data-task="back"][data-s="barcas"]').click();await until(async()=>await pages[0].locator('#writeStatus').innerText()==='Alteração guardada.','reopen');
    await pages[0].locator('[data-task="back"][data-s="barcas"]').click();await until(async()=>await pages[0].getByRole('button',{name:'Iniciar barca',exact:true}).last().isEnabled(),'reset');

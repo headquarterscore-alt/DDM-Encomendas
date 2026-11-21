@@ -1,4 +1,4 @@
-const stations = {barcas:"Barcas",bancada:"Bancada"};
+const stations = {bancada:"Peixe-Marisco",barcas:"Barcas"};
 const states = ["Por iniciar","Em preparação","Prontas"];
 const categories = ["Barcas","Peixe fresco","Marisco fresco","Marisco cozido","Congelados"];
 const catalog = [
@@ -59,7 +59,7 @@ const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&
 const cls=["wait","work","ready"];
 const categoryIcons=["boat","fish","waves","pot","snow"];
 const dayNow=()=>lisbonDay();
-let page="preparacao",station="barcas",day=dayNow(),orders=[],loaded=false,synced=false,loading=false,serial=0;
+let page="preparacao",station="bancada",day=dayNow(),orders=[],loaded=false,synced=false,loading=false,serial=0;
 let syncError=false;let query="",filter="all",listState="all",menu="",focusMode=false,detailId=null,busy=false,dialogMode="",draft=null,entry=null,editIndex=-1;
 let savingId=null,saveMessage="";
 try{focusMode=localStorage.getItem("ddm-modo-posto")==="true";}catch{}
@@ -127,7 +127,7 @@ async function request(url,data){
 }
 function route(){
  const [raw,param]=location.hash.slice(1).split("/");page=["cliente","encomendas"].includes(raw)?raw:"preparacao";
- if(["barcas","bancada"].includes(param)){station=param;try{localStorage.setItem("ddm-posto",station)}catch{}}else if(!raw||raw==="preparacao"){try{station=localStorage.getItem("ddm-posto")==="bancada"?"bancada":"barcas"}catch{}}
+ if(["barcas","bancada"].includes(param)){station=param;try{localStorage.setItem("ddm-posto",station)}catch{}}else if(!raw||raw==="preparacao"){try{station=localStorage.getItem("ddm-posto")==="barcas"?"barcas":"bancada"}catch{}}
  if(page==="preparacao"){try{focusMode=localStorage.getItem("ddm-modo-posto")==="true";}catch{}}
  query="";filter="all";menu="";if(page!=="preparacao")focusMode=false;
  document.body.classList.toggle("focus",focusMode);if(dialog.open)dialog.close();render();sync();
@@ -151,7 +151,7 @@ async function sync(){
  finally{if(fetchDay===selected)fetchDay=null;renderSync();}
 }
 function renderSync(){
- document.querySelectorAll(".sync").forEach(el=>{el.classList.toggle("off",!synced);el.innerHTML=`<span></span>${synced?"Base ligada":networkProblem?"Sem ligação":"A ligar"}`;el.title=lastSync?"Última leitura às "+new Date(lastSync).toLocaleTimeString("pt-PT"):"Ligação à base de dados da equipa";});
+ document.querySelectorAll(".sync").forEach(el=>{el.classList.toggle("off",!synced);el.innerHTML=`<span></span>${synced?"Ligado":networkProblem?"Sem ligação":"A ligar"}`;el.title=lastSync?"Última leitura às "+new Date(lastSync).toLocaleTimeString("pt-PT",{timeZone:"Europe/Lisbon"}):"Ligação à base de dados da equipa";});
  const b=document.getElementById("networkStatus");
  b.hidden=!networkProblem;b.querySelector("span").textContent=lastSync?"Sem ligação. A última leitura foi às "+new Date(lastSync).toLocaleTimeString("pt-PT")+". Volta a ligar para guardar alterações.":"Não foi possível carregar as encomendas da equipa. Verifica a ligação e tenta novamente.";
  document.querySelectorAll("[data-advance],[data-boat-step],[data-task],[data-handoff]").forEach(el=>{el.disabled=busy||!synced;});
@@ -161,11 +161,17 @@ function renderSync(){
 const button=(name,text,act,extra="")=>`<button type="button" class="btn ${extra}" data-act="${act}">${name?icon(name):""}${text}</button>`;
 function header(){
  const client=page==="cliente",list=page==="encomendas";
- const title=client?"Encomendar na Delicias do Mar":list?"Encomendas":focusMode?"Posto · "+stations[station]:"Painel de preparação";
- return `<div class="pagehead"><div><div class="kicker date">${icon(client?"store":"calendar",15)}${client?"LOJA DE DEMONSTRAÇÃO":esc(fullDate(day))}</div><h1>${title}</h1></div><div class="head-actions">${client?"":`<span class="sync"></span>${!list?`<button class="btn square" title="${focusMode?"Sair do modo posto":"Modo posto em ecrã inteiro"}" aria-label="${focusMode?"Sair do modo posto":"Modo posto em ecrã inteiro"}" data-act="focus">${icon(focusMode?"shrink":"expand")}</button>`:""}${button("plus","Nova encomenda","new","primary")}`}</div></div>`;
+ const title=client?"Cliente":list?"Encomendas":stations[station];
+ return `<div class="pagehead station-header"><h1>${title}</h1><div class="header-date">${icon("calendar",30)}<span data-today></span></div><div class="header-clock" aria-label="Hora atual em Lisboa">${icon("clock",34)}<time data-clock></time></div><div class="head-actions"><span class="sync" role="status"></span>${!client&&!list?`<button class="btn square" title="${focusMode?"Sair do modo posto":"Modo posto em ecrã inteiro"}" aria-label="${focusMode?"Sair do modo posto":"Modo posto em ecrã inteiro"}" data-act="focus">${icon(focusMode?"shrink":"expand",30)}</button>`:""}${client?"":button("plus","Nova encomenda","new","primary")}</div></div>`;
+}
+function updateClock(){
+ const now=new Date();
+ const date=new Intl.DateTimeFormat("pt-PT",{timeZone:"Europe/Lisbon",weekday:"long",day:"numeric",month:"long"}).format(now);
+ document.querySelectorAll("[data-today]").forEach(el=>{el.textContent=date.charAt(0).toUpperCase()+date.slice(1);});
+ document.querySelectorAll("[data-clock]").forEach(el=>{el.textContent=new Intl.DateTimeFormat("pt-PT",{timeZone:"Europe/Lisbon",hour:"2-digit",minute:"2-digit",hourCycle:"h23"}).format(now);el.dateTime=now.toISOString();});
 }
 function stationCards(){return `<div class="stations" aria-label="Selecionar posto">${Object.entries(stations).map(([k,title],i)=>`<button data-station="${k}" class="station ${k} ${station===k?"selected":""}" aria-pressed="${station===k}">
-<div class="station-art" aria-hidden="true"></div><div class="station-copy"><span class="station-num"><span class="tiny-rule"></span>POSTO 0${i+1}</span><strong>${title}</strong><span class="station-desc">${i===0?"Recolha, cozedura e montagem":"Frescos, cozidos e congelados"}</span></div><span class="station-state">${station===k?icon("check",13):""}</span></button>`).join("")}</div>`;}
+<div class="station-art" aria-hidden="true"></div><div class="station-copy"><span class="station-num"><span class="tiny-rule"></span>POSTO 0${i+1}</span><strong>${title}</strong><span class="station-desc">${k==="barcas"?"Preparação das barcas":"Peixe, marisco e congelados"}</span></div><span class="station-state">${station===k?icon("check",13):""}</span></button>`).join("")}</div>`;}
 function statusPill(n){return `<span class="status-pill ${cls[n]}"><b></b>${["Por iniciar","Em preparação","Pronta"][n]}</span>`;}
 const modeIcon=o=>o.delivery==="Entrega"?"truck":"shop";
 function datePicker(){const text=day===dayNow()?"Hoje":day===shiftDay(dayNow(),1)?"Amanhã":dateText(day,{day:"2-digit",month:"short"});return `<label class="date-pick" title="Escolher dia">${icon("calendar",16)}${esc(text)}${icon("chev",13)}<input type="date" id="orderDay" aria-label="Dia das encomendas" value="${esc(day)}"></label>`;}
@@ -183,8 +189,8 @@ function orderCard(o,n){
  <button class="ticket-customer" data-detail="${o.id}"><small>${typeName(o)}</small><strong>${esc(o.name)}</strong></button>
  <div class="ticket-products">${lines.map(i=>station==="barcas"?`<div class="ticket-product"><h4>${esc(label(i))}${i.qty>1?` × ${fmtQty(i.qty)}`:""}</h4><div class="boat-spec"><strong>${esc(i.people)} pessoas</strong><span>${esc(i.size||product(i.product)?.size||"")}</span></div><p>${esc(i.use)} · ${fmtQty(i.budget)} € de marisco</p>${i.note?`<p class="product-note">${esc(i.note)}</p>`:""}</div>`:`<div class="ticket-product"><div class="product-heading"><h4>${esc(label(i))}</h4><strong class="product-quantity">${fmtQty(i.qty)} <span>${esc(unit(i))}</span></strong></div><p class="product-cut">Corte: <strong>${esc(i.cut||"Não indicado")}</strong></p>${i.note?`<p class="product-note">${esc(i.note)}</p>`:""}</div>`).join("")}</div>
  ${o.note?`<p class="ticket-note">${esc(o.note)}</p>`:""}
- ${station==="barcas"?boatControls(o):n<2?`<p class="next-action">Próxima ação · ${n?"Preparar todos os produtos acima":"Iniciar a preparação"}</p><button class="ticket-action primary" data-advance="${o.id}">${n?"Concluir bancada":"Iniciar bancada"}</button>`:""}
- ${n===2?`<p class="completion">${icon("check",18)} ${stations[station]} concluída${station==="barcas"?"s":""}</p>${globalState(o)===2?`<button class="ticket-action primary" data-handoff="${o.id}">Registar entrega</button>`:`<p class="awaiting">A aguardar ${other==="barcas"?"as Barcas":"a Bancada"}</p>`}`:""}
+ ${station==="barcas"?boatControls(o):n<2?`<p class="next-action">Próxima ação · ${n?"Preparar todos os produtos acima":"Iniciar a preparação"}</p><button class="ticket-action primary" data-advance="${o.id}">${n?"Concluir preparação":"Iniciar preparação"}</button>`:""}
+ ${n===2?`<p class="completion">${icon("check",18)} ${station==="barcas"?"Barcas concluídas":"Preparação concluída"}</p>${globalState(o)===2?`<button class="ticket-action primary" data-handoff="${o.id}">Registar entrega</button>`:`<p class="awaiting">A aguardar ${other==="barcas"?"as Barcas":"Peixe-Marisco"}</p>`}`:""}
  ${o.tasks[other]!==undefined&&n!==2?`<p class="other-station">${stations[other]}: ${states[o.tasks[other]]}</p>`:""}
  <p class="card-save" data-saving="${o.id}"></p></article>`;
 }
@@ -204,7 +210,7 @@ function boardContent(){
 }
 function listContent(){
  const items=orders.filter(match).filter(o=>listState==="all"||listState==="entregues"&&o.handed||listState==="ativas"&&!o.handed).sort(byTime);
- return `<div class="list-tabs">${[["all","Todas"],["ativas","Em aberto"],["entregues","Entregues"]].map(([key,t])=>`<button data-list="${key}" class="${key===listState?"active":""}">${t}</button>`).join("")}</div><div class="order-table"><div class="table-row table-head"><span>Encomenda</span><span>Cliente</span><span>Hora prevista</span><span>Postos</span><span>Estado</span></div>${items.map(o=>`<button data-detail="${o.id}" class="table-row"><strong>${code(o.id)}</strong><span>${esc(o.name)}<small>${typeName(o)}</small></span><span>${esc(o.time)}<small>${esc(o.delivery)}</small></span><span>${Object.keys(o.tasks).map(k=>k==="barcas"?"Barcas":"Bancada").join(" + ")}</span><span>${o.handed?`<span class="delivered">${icon("check",14)} Entregue</span>`:statusPill(globalState(o))}</span></button>`).join("")||empty("Sem encomendas para estes critérios.")}</div>`;
+ return `<div class="list-tabs">${[["all","Todas"],["ativas","Em aberto"],["entregues","Entregues"]].map(([key,t])=>`<button data-list="${key}" class="${key===listState?"active":""}">${t}</button>`).join("")}</div><div class="order-table"><div class="table-row table-head"><span>Encomenda</span><span>Cliente</span><span>Hora prevista</span><span>Postos</span><span>Estado</span></div>${items.map(o=>`<button data-detail="${o.id}" class="table-row"><strong>${code(o.id)}</strong><span>${esc(o.name)}<small>${typeName(o)}</small></span><span>${esc(o.time)}<small>${esc(o.delivery)}</small></span><span>${Object.keys(o.tasks).map(k=>stations[k]).join(" + ")}</span><span>${o.handed?`<span class="delivered">${icon("check",14)} Entregue</span>`:statusPill(globalState(o))}</span></button>`).join("")||empty("Sem encomendas para estes critérios.")}</div>`;
 }
 function clientContent(){return `<div class="client-intro"><div><span class="station-num">ENCOMENDAS</span><h2>O que vai levar?</h2><p>Escolha os artigos, a preparação e a hora pretendida.</p>${button("bag","Começar encomenda","new","primary")}</div><div class="client-art"></div></div><h2 class="catalog-title">Escolher por categoria</h2><div class="cat-grid">${categories.map((c,n)=>`<button type="button" data-startcat="${n}"><span class="cat-symbol">${icon(categoryIcons[n],28)}</span><strong>${c}</strong><span>${catalog.filter(p=>p.cat===n).length} opções ${icon("right",14)}</span></button>`).join("")}</div><p class="helptext">${icon("info",16)} Demonstração. Os pedidos entram apenas nos postos de teste.</p>`;}
 function render(){
@@ -212,7 +218,7 @@ function render(){
  document.querySelectorAll("[data-nav]").forEach(a=>{a.classList.toggle("active",a.dataset.nav===page);if(a.dataset.nav===page)a.setAttribute("aria-current","page");else a.removeAttribute("aria-current");});
  const total=page==="preparacao"?orders.filter(o=>!o.handed&&o.tasks[station]!==undefined).length:orders.length;
  main.innerHTML=header()+(page==="cliente"?clientContent():(page==="preparacao"?stationCards():"")+toolbar(total)+`<div id="results">${page==="preparacao"?boardContent():listContent()}</div>`)+`<footer><span>Delicias do Mar <b>·</b> Loulé</span><span>${icon("waves",19)} Central de encomendas</span></footer>`;
- renderSync();
+ updateClock();renderSync();
 }
 function rerenderResults(){const el=$("#results");if(el)el.innerHTML=page==="preparacao"?boardContent():listContent();renderSync();}
 function setDay(d){if(!d||d===day)return;day=d;orders=[];loaded=false;synced=false;render();sync();}
@@ -248,7 +254,7 @@ function workControls(o,s){
  return `<div class="task-head"><h3>${icon(s==="barcas"?"boat":"fish")} ${stations[s]}</h3>${statusPill(n)}</div>
  <div class="task-lines">${o.items.filter(i=>group(i)===s).map(i=>`<div class="task-line">${icon(n===2?"checked":s==="barcas"?"boat":"fish",18)}<div><strong>${esc(label(i))}${i.qty>1&&s==="barcas"?" × "+fmtQty(i.qty):""}</strong><small>${esc(lineDescription(i))}${s==="barcas"&&i.note?" · "+esc(i.note):""}</small></div></div>`).join("")}</div>
  ${s==="barcas"?boatControls(o):""}
- ${o.handed?"":`<div class="task-btns">${n>0?`<button class="btn minor" data-task="back" data-s="${s}">${n===1?"Voltar a por iniciar":"Reabrir preparação"}</button>`:""}${n<2&&s!=="barcas"?`<button class="btn dark" data-task="advance" data-s="${s}">${icon(n?"check":"play",15)}${n?"Concluir bancada":"Iniciar bancada"}</button>`:""}</div>`}`;
+ ${o.handed?"":`<div class="task-btns">${n>0?`<button class="btn minor" data-task="back" data-s="${s}">${n===1?"Voltar a por iniciar":"Reabrir preparação"}</button>`:""}${n<2&&s!=="barcas"?`<button class="btn dark" data-task="advance" data-s="${s}">${icon(n?"check":"play",15)}${n?"Concluir preparação":"Iniciar preparação"}</button>`:""}</div>`}`;
 }
 function drawDetail(){
  const o=findOrder(detailId);if(!o)return;
@@ -351,3 +357,4 @@ window.addEventListener("offline",()=>{++serial;synced=false;networkProblem=true
 document.addEventListener("visibilitychange",()=>{if(!document.hidden)sync();});
 document.querySelector("#retrySync").onclick=sync;
 setInterval(()=>{if(!document.hidden&&!busy)sync();},3500);route();
+setInterval(updateClock,1000);
