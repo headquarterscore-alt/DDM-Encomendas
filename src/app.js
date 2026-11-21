@@ -1,4 +1,4 @@
-const stations = {barcas:"Barcas de marisco",bancada:"Peixe e marisco"};
+const stations = {barcas:"Barcas",bancada:"Bancada"};
 const states = ["Por iniciar","Em preparação","Prontas"];
 const categories = ["Barcas","Peixe fresco","Marisco fresco","Marisco cozido","Congelados"];
 const catalog = [
@@ -18,7 +18,7 @@ function shiftDay(day,delta){ const d=new Date(day+"T12:00:00Z"); d.setUTCDate(d
 const product=id=>catalog.find(p=>p.id===id);
 const group=i=> i.product==="apoio"?"bancada":product(i.product).cat===0?"barcas":"bancada";
 const label=i=>i.product==="apoio"?"Cozedura para a barca":product(i.product)?.name||"Artigo";
-const unit=i=>i.product==="apoio"?"":product(i.product)?.unit||"";
+const unit=i=>i.product==="apoio"?"":i.unit||product(i.product)?.unit||"";
 const fmtQty=n=>Number(n).toLocaleString("pt-PT",{maximumFractionDigits:2});
 const code=id=>refs.get(Number(id))||String(id);
 const globalState=o=>Object.values(o.tasks).every(v=>v===2)?2:Object.values(o.tasks).some(v=>v>0)?1:0;
@@ -28,7 +28,7 @@ function lineDescription(i){
  if(i.product==="apoio")return i.note;
  const p=product(i.product);
  if(p.cat===0)return [i.people+" pessoas",i.use,fmtQty(i.budget)+" € de marisco"].join(" · ");
- return [fmtQty(i.qty)+" "+p.unit,i.cut,i.note].filter(Boolean).join(" · ");
+ return [fmtQty(i.qty)+" "+unit(i),i.cut,i.note].filter(Boolean).join(" · ");
 }
 
 const paths={
@@ -61,6 +61,8 @@ const categoryIcons=["boat","fish","waves","pot","snow"];
 const dayNow=()=>lisbonDay();
 let page="preparacao",station="barcas",day=dayNow(),orders=[],loaded=false,synced=false,loading=false,serial=0;
 let syncError=false;let query="",filter="all",listState="all",menu="",focusMode=false,detailId=null,busy=false,dialogMode="",draft=null,entry=null,editIndex=-1;
+let savingId=null,saveMessage="";
+try{focusMode=localStorage.getItem("ddm-modo-posto")==="true";}catch{}
 const dialog=$("#dialog"),panel=$("#dialogContent"),main=$("#main");
 const dateText=(d,opts)=>new Intl.DateTimeFormat("pt-PT",opts).format(new Date(d+"T12:00:00Z"));
 const findOrder=id=>orders.find(o=>o.id===Number(id));
@@ -76,7 +78,7 @@ const cookKeys={pending:"por_cozer",done:"cozido_no_posto",skip:"dispensado"};
 const unitKeys={"un.":"un","dz.":"dz","kg":"kg"};
 async function rest(path,payload){
  let r;try{r=await fetch(base+"/rest/v1/"+path,{signal:AbortSignal.timeout(8000),method:payload?"POST":"GET",headers:{apikey:publicKey,"Content-Type":"application/json"},body:payload?JSON.stringify(payload):undefined,cache:"no-store"});}catch{throw Error("Sem ligação à demo. Verifica a ligação à internet e tenta novamente.");}
- const j=await r.json();if(!r.ok)throw Error(j.message||"Não foi possível guardar.");return j;
+ const j=await r.json();if(!r.ok)throw Object.assign(Error(j.message||"Não foi possível guardar."),{status:r.status});return j;
 }
 function convertRow(o){
  const id=Number(o.ref.split("-").at(-1));refs.set(id,o.ref);rawOrders.set(id,o);
@@ -84,7 +86,7 @@ function convertRow(o){
  const items=o.order_items.sort((a,b)=>a.position-b.position).map((i,k)=>{
  let p=catalog.find(p=>p.name===i.product&&catKeys[p.cat]===i.category);
  if(!p){p={id:"custom-"+i.category+"-"+i.product,cat:catKeys.indexOf(i.category),name:i.product,unit:{"kg":"kg","un":"un.","dz":"dz."}[i.unit]||"un."};catalog.push(p);}
- return {product:p.id,line:k+1,qty:Number(i.quantity||1),note:i.notes||"",people:i.people,use:i.meal_type==="petisco"?"Petisco":"Refeição",budget:i.budget,cut:i.cut?i.cut[0].toUpperCase()+i.cut.slice(1):"",done:tasks[catKeys[p.cat]==="barcas"?"barcas":"bancada"]===2};});
+ return {product:p.id,line:k+1,qty:Number(i.quantity||1),unit:({kg:"kg",un:"un.",dz:"dz."})[i.unit]||i.unit,note:i.notes||"",people:i.people,size:p.size||i.barca_size||"",use:i.meal_type==="petisco"?"Petisco":"Refeição",budget:i.budget,cut:i.cut?i.cut[0].toUpperCase()+i.cut.slice(1):"",done:tasks[catKeys[p.cat]==="barcas"?"barcas":"bancada"]===2};});
  return {id,version:o.station_tasks.reduce((s,t)=>s+t.version,0),name:o.customer_name,type:o.customer_type,day:o.business_date,time:o.scheduled_time.slice(0,5),delivery:o.fulfilment==="entrega"?"Entrega":"Levantamento",address:o.address,priority:o.priority!=="normal",note:o.notes,phone:"",channel:o.source==="cliente"?"Cliente":"Equipa",handed:o.status==="entregue",items,tasks,boatSteps:boat?{gathered:boat.shellfish_collected,cooked:Object.keys(cookKeys).find(k=>cookKeys[k]===boat.cooking),assembled:boat.assembly_done}:null};
 }
 async function readOne(uuid){const rows=await rest("orders?select=*,station_tasks(*),order_items(*)&id=eq."+encodeURIComponent(uuid));return convertRow(rows[0]);}
@@ -125,7 +127,8 @@ async function request(url,data){
 }
 function route(){
  const [raw,param]=location.hash.slice(1).split("/");page=["cliente","encomendas"].includes(raw)?raw:"preparacao";
- if(["barcas","bancada"].includes(param))station=param;else if(!raw||raw==="preparacao"){try{station=localStorage.getItem("ddm-posto")==="bancada"?"bancada":"barcas"}catch{}}
+ if(["barcas","bancada"].includes(param)){station=param;try{localStorage.setItem("ddm-posto",station)}catch{}}else if(!raw||raw==="preparacao"){try{station=localStorage.getItem("ddm-posto")==="bancada"?"bancada":"barcas"}catch{}}
+ if(page==="preparacao"){try{focusMode=localStorage.getItem("ddm-modo-posto")==="true";}catch{}}
  query="";filter="all";menu="";if(page!=="preparacao")focusMode=false;
  document.body.classList.toggle("focus",focusMode);if(dialog.open)dialog.close();render();sync();
 }
@@ -136,6 +139,7 @@ function selectStation(s){
 
 let lastSync=0,fetchDay=null,networkProblem=false;
 async function sync(){
+ if(busy)return;
  const selected=day;if(fetchDay===selected)return;fetchDay=selected;
  const current=++serial;
  try{
@@ -150,11 +154,14 @@ function renderSync(){
  document.querySelectorAll(".sync").forEach(el=>{el.classList.toggle("off",!synced);el.innerHTML=`<span></span>${synced?"Base ligada":networkProblem?"Sem ligação":"A ligar"}`;el.title=lastSync?"Última leitura às "+new Date(lastSync).toLocaleTimeString("pt-PT"):"Ligação à base de dados da equipa";});
  const b=document.getElementById("networkStatus");
  b.hidden=!networkProblem;b.querySelector("span").textContent=lastSync?"Sem ligação. A última leitura foi às "+new Date(lastSync).toLocaleTimeString("pt-PT")+". Volta a ligar para guardar alterações.":"Não foi possível carregar as encomendas da equipa. Verifica a ligação e tenta novamente.";
+ document.querySelectorAll("[data-advance],[data-boat-step],[data-task],[data-handoff]").forEach(el=>{el.disabled=busy||!synced;});
+ document.querySelectorAll("[data-saving]").forEach(el=>{el.textContent=Number(el.dataset.saving)===savingId?saveMessage:"";});
+ const status=$("#writeStatus");status.textContent=saveMessage;
 }
 const button=(name,text,act,extra="")=>`<button type="button" class="btn ${extra}" data-act="${act}">${name?icon(name):""}${text}</button>`;
 function header(){
  const client=page==="cliente",list=page==="encomendas";
- const title=client?"Encomendar na Delicias do Mar":list?"Encomendas":"Painel de preparação";
+ const title=client?"Encomendar na Delicias do Mar":list?"Encomendas":focusMode?"Posto · "+stations[station]:"Painel de preparação";
  return `<div class="pagehead"><div><div class="kicker date">${icon(client?"store":"calendar",15)}${client?"LOJA DE DEMONSTRAÇÃO":esc(fullDate(day))}</div><h1>${title}</h1></div><div class="head-actions">${client?"":`<span class="sync"></span>${!list?`<button class="btn square" title="${focusMode?"Sair do modo posto":"Modo posto em ecrã inteiro"}" aria-label="${focusMode?"Sair do modo posto":"Modo posto em ecrã inteiro"}" data-act="focus">${icon(focusMode?"shrink":"expand")}</button>`:""}${button("plus","Nova encomenda","new","primary")}`}</div></div>`;
 }
 function stationCards(){return `<div class="stations" aria-label="Selecionar posto">${Object.entries(stations).map(([k,title],i)=>`<button data-station="${k}" class="station ${k} ${station===k?"selected":""}" aria-pressed="${station===k}">
@@ -169,15 +176,26 @@ const normal=t=>String(t).normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowe
 function match(o){const f=filter==="all"||filter==="urgente"&&o.priority||filter===o.delivery||filter===o.type||filter==="mista"&&Object.keys(o.tasks).length===2;
  return f&&normal([code(o.id),o.name,...o.items.map(label)].join(" ")).includes(normal(query.trim()));}
 function orderCard(o,n){
- const lines=o.items.filter(i=>group(i)===station);const i=lines[0],p=product(i.product);
- const subtitle=p.cat===0?`${i.people} pessoas · ${i.use}`:lineDescription(i);
- const detail=lines.length>1?` <span class="moreitems">+${lines.length-1}</span>`:"";
- const fullName=`${p.cat===0&&i.qty>1?fmtQty(i.qty)+" × ":""}${label(i)}`;
- return `<article class="ticket ${cls[n]}"><div class="ticket-top"><button class="ref" data-detail="${o.id}" aria-label="Abrir ${code(o.id)}">${code(o.id)}</button>${o.priority?`<span class="priority">${icon("flag",13)}Prioritária</span>`:o.tasks.barcas!==undefined&&o.tasks.bancada!==undefined?`<span class="mixed" title="Encomenda dos dois postos">${icon("columns",13)}Dois postos</span>`:""}</div>
- <button class="ticket-name" data-detail="${o.id}">${esc(fullName)}${detail}</button><div class="ticket-sub">${esc(subtitle)}</div>
- <div class="customer">${icon(o.type==="restaurante"?"fork":"user",16)}<span>${esc(o.name)}</span></div>
- <div class="ticket-meta"><strong>${icon("clock",16)}${esc(o.time)}</strong><span>${icon(modeIcon(o),15)}${esc(o.delivery)}</span></div>
- <button class="ticket-action ${cls[n]}" ${n===2?`data-detail="${o.id}"`:`data-advance="${o.id}"`}><span>${icon(["play","check","detail"][n],15)}${["Iniciar preparação","Concluir preparação","Ver ficha"][n]}</span>${icon("right",14)}</button></article>`;
+ const lines=o.items.filter(i=>group(i)===station);
+ const other=station==="barcas"?"bancada":"barcas";
+ return `<article class="ticket ${cls[n]} ${station}-ticket" data-order="${o.id}" aria-label="${esc(code(o.id)+" · "+o.name)}"><div class="ticket-top"><button class="ref" data-detail="${o.id}" aria-label="Abrir ${esc(code(o.id))}">${esc(code(o.id))}</button>${o.priority?`<span class="priority">${icon("flag",13)}Prioritária</span>`:""}${o.tasks[other]!==undefined?`<span class="mixed">Dois postos</span>`:""}</div>
+ <div class="ticket-deadline"><strong>${esc(o.time)}</strong><span>${icon(modeIcon(o),18)}${esc(o.delivery)}</span></div>
+ <button class="ticket-customer" data-detail="${o.id}"><small>${typeName(o)}</small><strong>${esc(o.name)}</strong></button>
+ <div class="ticket-products">${lines.map(i=>station==="barcas"?`<div class="ticket-product"><h4>${esc(label(i))}${i.qty>1?` × ${fmtQty(i.qty)}`:""}</h4><div class="boat-spec"><strong>${esc(i.people)} pessoas</strong><span>${esc(i.size||product(i.product)?.size||"")}</span></div><p>${esc(i.use)} · ${fmtQty(i.budget)} € de marisco</p>${i.note?`<p class="product-note">${esc(i.note)}</p>`:""}</div>`:`<div class="ticket-product"><div class="product-heading"><h4>${esc(label(i))}</h4><strong class="product-quantity">${fmtQty(i.qty)} <span>${esc(unit(i))}</span></strong></div><p class="product-cut">Corte: <strong>${esc(i.cut||"Não indicado")}</strong></p>${i.note?`<p class="product-note">${esc(i.note)}</p>`:""}</div>`).join("")}</div>
+ ${o.note?`<p class="ticket-note">${esc(o.note)}</p>`:""}
+ ${station==="barcas"?boatControls(o):n<2?`<p class="next-action">Próxima ação · ${n?"Preparar todos os produtos acima":"Iniciar a preparação"}</p><button class="ticket-action primary" data-advance="${o.id}">${n?"Concluir bancada":"Iniciar bancada"}</button>`:""}
+ ${n===2?`<p class="completion">${icon("check",18)} ${stations[station]} concluída${station==="barcas"?"s":""}</p>${globalState(o)===2?`<button class="ticket-action primary" data-handoff="${o.id}">Registar entrega</button>`:`<p class="awaiting">A aguardar ${other==="barcas"?"as Barcas":"a Bancada"}</p>`}`:""}
+ ${o.tasks[other]!==undefined&&n!==2?`<p class="other-station">${stations[other]}: ${states[o.tasks[other]]}</p>`:""}
+ <p class="card-save" data-saving="${o.id}"></p></article>`;
+}
+function boatControls(o){
+ const n=o.tasks.barcas,s=o.boatSteps||{},cooked=["done","skip"].includes(s.cooked);
+ const steps=`<ol class="boat-progress"><li class="${s.gathered?"complete":""}">${s.gathered?"✓":"1"} Marisco recolhido</li><li class="${cooked?"complete":""}">${cooked?"✓":"2"} ${s.cooked==="skip"?"Cozedura dispensada":s.cooked==="done"?"Cozedura feita":"Cozedura"}</li><li class="${s.assembled?"complete":""}">${s.assembled?"✓":"3"} Montagem concluída</li></ol>`;
+ if(n===2||o.handed)return steps;
+ const action=(step,value,text)=>`<button class="ticket-action primary" data-boat-step="${step}" data-value="${value}" data-order-id="${o.id}">${text}</button>`;
+ const next=n===0?"Iniciar a barca":!s.gathered?"Recolher o marisco":!cooked?"Confirmar a cozedura":!s.assembled?"Montar a barca":"Concluir a barca";
+ const controls=n===0?`<button class="ticket-action primary" data-advance="${o.id}" data-s="barcas">Iniciar barca</button>`:!s.gathered?action("gathered","true","Registar marisco recolhido"):!cooked?`<div class="cooking-actions">${action("cooked","done","Registar cozedura feita")}${action("cooked","skip","Dispensar cozedura")}</div>`:!s.assembled?action("assembled","true","Registar montagem concluída"):`<button class="ticket-action primary" data-advance="${o.id}" data-s="barcas">Concluir barca</button>`;
+ return `${steps}<p class="next-action">Próxima ação · ${next}</p>${controls}<p class="station-responsibility">O marisco desta barca é preparado nas Barcas.</p>`;
 }
 function empty(text){return `<div class="empty">${icon("bando",24)}<span>${text}</span></div>`;}
 function boardContent(){
@@ -196,13 +214,16 @@ function render(){
  main.innerHTML=header()+(page==="cliente"?clientContent():(page==="preparacao"?stationCards():"")+toolbar(total)+`<div id="results">${page==="preparacao"?boardContent():listContent()}</div>`)+`<footer><span>Delicias do Mar <b>·</b> Loulé</span><span>${icon("waves",19)} Central de encomendas</span></footer>`;
  renderSync();
 }
-function rerenderResults(){const el=$("#results");if(el)el.innerHTML=page==="preparacao"?boardContent():listContent();}
+function rerenderResults(){const el=$("#results");if(el)el.innerHTML=page==="preparacao"?boardContent():listContent();renderSync();}
 function setDay(d){if(!d||d===day)return;day=d;orders=[];loaded=false;synced=false;render();sync();}
 function updateOrder(o){if(o.day!==day)return;const i=orders.findIndex(x=>x.id===o.id);if(i<0)orders.push(o);else if(orders[i].version<=o.version)orders[i]=o;}
 async function mutate(o,action,extra={}){
- if(busy||!o)return;busy=true;
- try{
+ if(busy||!o||o.handed)return;
  const target=extra.station||station;
+ if(action==="handoff"&&globalState(o)!==2)return;
+ if(action==="advance"&&target==="barcas"&&o.tasks.barcas===1&&(!o.boatSteps?.gathered||!o.boatSteps?.assembled||!["done","skip"].includes(o.boatSteps?.cooked)))return;
+ busy=true;savingId=o.id;saveMessage="A guardar…";++serial;renderSync();
+ try{
  const send=version=>request("/api/orders/"+o.id,{version,action,station:target,...extra});
  let result;
  try{result=await send(o.version);}catch(error){
@@ -213,11 +234,11 @@ async function mutate(o,action,extra={}){
   result=await send(fresh.version);
  }
  const {order}=result;
- ++serial;updateOrder(order);synced=true;render();if(dialog.open&&dialogMode==="detail")drawDetail();
+ ++serial;updateOrder(order);synced=true;networkProblem=false;lastSync=Date.now();saveMessage="Alteração guardada.";render();if(dialog.open&&dialogMode==="detail")drawDetail();
  if(action==="advance")notice(order.tasks[extra.station||station]===2?"Preparação concluída.":"Preparação iniciada.");
  if(action==="handoff")notice("Entrega registada.");
- }catch(e){notice(e.message||"Não foi possível guardar.");await sync();if(dialog.open&&dialogMode==="detail")drawDetail();}
- finally{busy=false;}
+ }catch(e){saveMessage="Não foi possível confirmar. A atualizar o estado…";notice(e.message||"Não foi possível guardar.");busy=false;await sync();if(dialog.open&&dialogMode==="detail")drawDetail();saveMessage="Confirma o estado antes de tentar novamente.";}
+ finally{busy=false;renderSync();}
 }
 function openDialog(mode){dialogMode=mode;dialog.classList.toggle("form-dialog",mode==="order");if(!dialog.open)dialog.showModal();dialog.scrollTop=0;}
 const modalHead=(eyebrow,title)=>`<div class="modal-head"><div><div class="kicker">${eyebrow}</div><h2 id="dialog-title">${title}</h2></div><button class="close" type="button" data-act="close" aria-label="Fechar">${icon("close",20)}</button></div>`;
@@ -226,8 +247,8 @@ function workControls(o,s){
  const n=o.tasks[s],chek=o.boatSteps||{};
  return `<div class="task-head"><h3>${icon(s==="barcas"?"boat":"fish")} ${stations[s]}</h3>${statusPill(n)}</div>
  <div class="task-lines">${o.items.filter(i=>group(i)===s).map(i=>`<div class="task-line">${icon(n===2?"checked":s==="barcas"?"boat":"fish",18)}<div><strong>${esc(label(i))}${i.qty>1&&s==="barcas"?" × "+fmtQty(i.qty):""}</strong><small>${esc(lineDescription(i))}${s==="barcas"&&i.note?" · "+esc(i.note):""}</small></div></div>`).join("")}</div>
- ${s==="barcas"&&n===1?`<div class="boat-check"><label><input data-step="gathered" type="checkbox" ${chek.gathered?"checked":""}> Marisco recolhido</label><label for="cozedura">Cozedura no posto das barcas</label><select id="cozedura" data-step="cooked"><option value="pending">Por confirmar</option><option value="done" ${chek.cooked==="done"?"selected":""}>Marisco cozido neste posto</option><option value="skip" ${chek.cooked==="skip"?"selected":""}>Já cozido / dispensada</option></select><label><input type="checkbox" data-step="assembled" ${chek.assembled?"checked":""}> Montagem concluída</label></div>`:""}
- ${o.handed?"":`<div class="task-btns">${n>0?`<button class="btn minor" data-task="back" data-s="${s}">${n===1?"Voltar a por iniciar":"Reabrir preparação"}</button>`:""}${n<2?`<button class="btn dark" data-task="advance" data-s="${s}" ${s==="barcas"&&n===1&&(!chek.gathered||!chek.assembled||chek.cooked==="pending")?"disabled":""}>${icon(n?"check":"play",15)}${n?"Concluir preparação":"Iniciar preparação"}</button>`:""}</div>`}`;
+ ${s==="barcas"?boatControls(o):""}
+ ${o.handed?"":`<div class="task-btns">${n>0?`<button class="btn minor" data-task="back" data-s="${s}">${n===1?"Voltar a por iniciar":"Reabrir preparação"}</button>`:""}${n<2&&s!=="barcas"?`<button class="btn dark" data-task="advance" data-s="${s}">${icon(n?"check":"play",15)}${n?"Concluir bancada":"Iniciar bancada"}</button>`:""}</div>`}`;
 }
 function drawDetail(){
  const o=findOrder(detailId);if(!o)return;
@@ -238,6 +259,7 @@ function drawDetail(){
  ${Object.keys(o.tasks).sort((a,b)=>a===station?-1:b===station?1:0).map(s=>`<section class="task">${workControls(o,s)}</section>`).join("")}
  <div class="global"><div><small>Estado da encomenda completa</small><strong>${state}</strong></div>${globalState(o)===2&&!o.handed?`<button class="btn primary" data-task="handoff">${icon("bag",16)} Registar entrega</button>`:""}</div></div>`;
  dialog.scrollTop=pos;
+ renderSync();
 }
 
 const mkKey=()=>globalThis.crypto?.randomUUID?.()||"demo-"+Date.now().toString(36)+"-"+Math.random().toString(36).slice(2);
@@ -305,7 +327,9 @@ document.addEventListener("click",async e=>{
  if(b.dataset.filter){filter=b.dataset.filter;menu="";render();return;}
  if(b.dataset.list){listState=b.dataset.list;rerenderResults();return;}
  if(b.dataset.detail){openDetail(b.dataset.detail);return;}
- if(b.dataset.advance){const o=findOrder(b.dataset.advance);if(station==="barcas"&&o.tasks.barcas===1&&(!o.boatSteps.gathered||!o.boatSteps.assembled||o.boatSteps.cooked==="pending")){openDetail(o.id);return;}await mutate(o,"advance");return;}
+ if(b.dataset.advance){await mutate(findOrder(b.dataset.advance),"advance",{station:b.dataset.s||station});return;}
+ if(b.dataset.boatStep){await mutate(findOrder(b.dataset.orderId),"boat",{station:"barcas",step:b.dataset.boatStep,value:b.dataset.value==="true"?true:b.dataset.value});return;}
+ if(b.dataset.handoff){await mutate(findOrder(b.dataset.handoff),"handoff");return;}
  if(b.dataset.task){await mutate(findOrder(detailId),b.dataset.task,{station:b.dataset.s||station});return;}
  if(b.dataset.startcat!==undefined){startOrder(+b.dataset.startcat);return;}
  if(b.dataset.edit!==undefined){editIndex=+b.dataset.edit;entry={...draft.items[editIndex]};drawForm();dialog.scrollTop=0;return;}
@@ -316,13 +340,14 @@ document.addEventListener("click",async e=>{
  if(act==="filter"){menu=menu==="filter"?"":"filter";render();}
  if(act==="next"||act==="prev"){if(act==="next"&&!draft.items.length)return;draftStep=act==="next"?2:1;hadFormError="";drawForm();dialog.scrollTop=0;}
  if(act==="canceledit"){editIndex=-1;entry=defaultEntry(entry.product);drawForm();}
- if(act==="focus"){focusMode=!focusMode;document.body.classList.toggle("focus",focusMode);render();try{if(focusMode&&!document.fullscreenElement)await document.documentElement.requestFullscreen();else if(!focusMode&&document.fullscreenElement)await document.exitFullscreen();}catch{}}
+ if(act==="focus"){focusMode=!focusMode;try{localStorage.setItem("ddm-modo-posto",String(focusMode))}catch{}document.body.classList.toggle("focus",focusMode);render();try{if(focusMode&&!document.fullscreenElement)await document.documentElement.requestFullscreen();else if(!focusMode&&document.fullscreenElement)await document.exitFullscreen();}catch{}}
 });
 dialog.addEventListener("cancel",e=>{if(busy)e.preventDefault();});
 dialog.addEventListener("close",()=>{detailId=null;dialogMode="";});
-document.addEventListener("fullscreenchange",()=>{if(!document.fullscreenElement&&focusMode){focusMode=false;document.body.classList.remove("focus");render();}});
+// O modo posto mantém-se mesmo quando o navegador sai do ecrã inteiro.
 document.addEventListener("keydown",e=>{if(e.key==="Escape"&&menu){menu="";render();}});
 window.addEventListener("hashchange",route);window.addEventListener("online",sync);
+window.addEventListener("offline",()=>{++serial;synced=false;networkProblem=true;renderSync();});
 document.addEventListener("visibilitychange",()=>{if(!document.hidden)sync();});
 document.querySelector("#retrySync").onclick=sync;
 setInterval(()=>{if(!document.hidden&&!busy)sync();},3500);route();

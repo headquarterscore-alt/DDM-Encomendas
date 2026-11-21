@@ -26,3 +26,32 @@ O posto das Barcas recolhe e coze o seu próprio marisco. O posto da Bancada tra
 Cria um ramo para a alteração e abre um pull request. Abre a pré-visualização no PC da loja e no telemóvel. Junta a alteração a `main` depois de a aprovares.
 
 Para gerar a pasta publicável localmente, usa Node.js 22.12 ou superior e executa `node build.mjs`. Os ficheiros para editar ficam em `src`. Cada alteração ao conteúdo gera uma nova versão da cache da app.
+
+## Modo posto tátil
+
+Seleciona **Barcas** ou **Bancada** e ativa o botão **Modo posto** no cabeçalho. O posto e o modo ficam guardados neste navegador/dispositivo, incluindo ao reabrir a app pelo endereço inicial. Os atalhos específicos da app escolhem e guardam o posto indicado. Sair do ecrã inteiro do navegador mantém o modo posto; o botão da app permite sair desse modo.
+
+Nas Barcas, os cartões permitem iniciar, registar recolha, confirmar cozedura feita ou dispensada, registar montagem e concluir. O marisco da barca pertence sempre às Barcas. Na Bancada, cada produto tem a sua quantidade, unidade e corte; concluir a Bancada confirma todos os seus produtos. Uma encomenda mista só disponibiliza **Registar entrega** depois de ambos os postos estarem prontos.
+
+As ações ficam bloqueadas durante a gravação ou sem ligação. A confirmação **Alteração guardada** só aparece após a resposta da base e a leitura do estado guardado. Se houver erro, a app atualiza a encomenda e pede para confirmar o estado antes de repetir.
+
+## Testes dos dois postos
+
+Com Node.js 22.12+ e npm:
+
+```sh
+npm install
+npx playwright install chromium
+npm run build
+npm test
+```
+
+O teste usa duas sessões de navegador com armazenamento independente e uma API simulada partilhada. Cobre a encomenda mista, unidades por artigo, etapas das Barcas (cozedura feita e dispensada), bloqueio da entrega, toques repetidos, erro de gravação, perda/recuperação de ligação, reabertura por dispositivo e alvos táteis de pelo menos 56 px. `DDM_BROWSER=chrome` permite usar o Chrome instalado; `msedge` usa o Edge.
+
+`npm run test:live` repete o percurso essencial na base de demonstração: **cria uma encomenda fictícia identificada como TESTE POSTOS**, conclui os dois postos e regista a entrega para a retirar da fila. Não executar contra uma base de produção. As duas sessões só partilham os dados do servidor, nunca o armazenamento local.
+
+Evidência de 21/11/2026: teste real concluído com `DM-1121-113`. A barca terminou com a Bancada ainda por iniciar; a entrega só ficou disponível depois da conclusão da Bancada; as duas sessões reabriram no posto e modo guardados. A encomenda fictícia foi marcada como entregue. As imagens mostram essa mesma encomenda durante a preparação:
+
+| Barcas | Bancada |
+| --- | --- |
+| ![Posto Barcas](docs/postos/barcas.png) | ![Posto Bancada](docs/postos/bancada.png) |
