@@ -89,3 +89,24 @@ nav [data-nav],.ticket .ref,.ticket-customer,.task-btns .btn,.global .btn,.list-
 #otherReason[hidden],#undoNotice[hidden] {display:none}
 #undoNotice {position:fixed;bottom:56px;left:50%;transform:translateX(-50%);z-index:1000;display:flex;align-items:center;gap:12px;padding:8px 12px;border-radius:8px;background:var(--navy);color:white;box-shadow:0 3px 12px #102c4126;width:max-content;max-width:94vw}
 #undoNotice .btn {background:white;color:var(--ink)}
+
+.quiz {font-size:18px}
+.quiz progress {display:block;width:100%;height:8px;accent-color:var(--navy);margin-bottom:24px}
+.quiz fieldset {min-width:0;border:0;margin:0 0 20px;padding:0}
+.quiz legend,.quiz-line>strong {font-size:20px;font-weight:700;margin:0 0 10px}
+.quiz-options,.quiz-counter,.contact-actions {display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin:10px 0 16px}
+.quiz-options button,.quiz-counter button,.quiz .btn,.contact-actions a {min-height:56px;min-width:56px;padding:10px 14px;border:1px solid var(--line);border-radius:8px;background:white;color:var(--ink);font-size:16px}
+.quiz-options button[aria-pressed="true"],.quiz .primary {background:var(--navy);color:white}
+.quiz-counter {align-items:end}
+.quiz-counter input {width:110px}
+.quiz-counter .field {margin:0}
+.quiz .field input,.quiz .field select,.quiz .checkfield {min-height:56px;font-size:17px}
+.quiz .checkfield {cursor:pointer}
+.quiz-line {border-top:1px solid var(--line);padding:12px 0}
+#quizError {color:#9c3427;font-weight:600}
+.order-number {display:block;font-size:clamp(36px,6vw,64px);margin:16px 0}
+.avoid-note,.contact-actions.late {border-left:4px solid #ad4515;padding:10px;background:#fff2de;color:#703211}
+.contact-actions.late a {background:#703211;color:white}
+.contact-actions:has(strong[hidden]):not(:has(a)) {display:none}
+.quiz .form-foot {position:sticky;bottom:0;z-index:1;gap:12px;padding:10px 0;background:white}
+.quiz .form-foot .btn {flex:1;justify-content:center}

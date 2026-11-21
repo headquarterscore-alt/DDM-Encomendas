@@ -39,6 +39,14 @@ Antes de publicar este fluxo, rever e aprovar [a alteração de update_task](mig
 
 As ações ficam bloqueadas durante a gravação ou sem ligação. A confirmação **Alteração guardada** só aparece após a resposta da base e a leitura do estado guardado. Se houver erro, a app atualiza a encomenda e pede para confirmar o estado antes de repetir.
 
+## Questionário de encomenda
+
+O separador **Cliente** e a ação **Nova encomenda** da equipa usam os mesmos seis passos. Nos dois modos é possível escolher levantamento ou entrega com morada, dia e hora. A equipa também pode marcar prioridade. **Não quero barca** permite avançar só com artigos do catálogo.
+
+O rascunho fica guardado no navegador por modo, incluindo ao fechar e reabrir. A confirmação limpa o rascunho desse modo. O número apresentado no fim identifica a encomenda. Os postos mostram o marisco a evitar e o contacto, com destaque quando passa a hora prevista.
+
+Rever [003_questionario.sql](migrations/003_questionario.sql) antes da publicação e aplicar após aprovação. A ocasião da encomenda pode ser Refeição, Evento, Petisco ou Outro. O tipo de serviço do artigo continua limitado a Refeição ou Petisco. O mesmo `client_token` permite repetir uma submissão se a ligação falhar.
+
 ## Histórico
 
 Escolhe o dia e filtra por **Todas**, **Por iniciar**, **Em preparação**, **Prontas**, **Entregues** ou **Canceladas**. Abre a encomenda para ver as ações disponíveis.
