@@ -25,6 +25,45 @@ const server=createServer((req,res)=>{
 });
 const wait=ms=>new Promise(r=>setTimeout(r,ms));
 async function until(fn,message){for(let i=0;i<100;i++){if(await fn())return;await wait(100);}throw Error(message);}
+async function testNewOrder(context,browserUrl){
+ const page=await context.newPage();
+ let created;
+ const rows=()=>Array.from({length:4},(_,i)=>({...fixture,ref:'DDM-'+(910001+i),customer_name:['Maria','José','Ana','Rui'][i],order_items:created.items.map((item,position)=>({...item,position})),station_tasks:[fixture.station_tasks[1]]}));
+ await page.route(base+'/**',route=>{
+  if(route.request().url().endsWith('/rpc/create_order')){
+   created=route.request().postDataJSON().payload;
+   return route.fulfill({json:{id:'test-new'}});
+  }
+  return route.fulfill({json:created?rows():[]});
+ });
+ try{
+  await page.goto(browserUrl+'/#preparacao/bancada');
+  const click=name=>page.getByRole('button',{name,exact:true}).click();
+  await click('Nova encomenda');
+  await click('Robalo');await click('À peça');await click('Aumentar quantidade');
+  assert.equal(await page.getByLabel('Peso por peixe (kg)',{exact:true}).inputValue(),'0.5');
+  await click('Aumentar quantidade');await click('Aumentar quantidade');await click('1 kg');
+  const dir=resolve(root,'docs/encomenda');mkdirSync(dir,{recursive:true});
+  await page.locator('#dialog').screenshot({path:resolve(dir,'artigos.png')});
+  await click('Adicionar à encomenda');await click('Marisco fresco');await click('Gamba da costa');
+  await click('Aumentar quantidade');await click('Adicionar à encomenda');await click('Continuar');
+  await page.getByLabel('Nome do cliente ou restaurante').fill('Maria');
+  await page.evaluate(()=>{HTMLInputElement.prototype.showPicker=function(){this.dataset.opened='yes';};});
+  for(const key of ['o.day','o.time']){
+   const input=page.locator('[data-field="'+key+'"]');
+   await input.click({position:{x:5,y:12}});
+   assert.equal(await input.getAttribute('data-opened'),'yes');
+  }
+  await click('Confirmar encomenda');await click('Concluir');
+  assert.deepEqual(created.items.map(i=>[i.product,i.quantity,i.unit,i.notes]),[['Robalo',4,'kg','4 un. de 1 kg cada'],['Gamba da costa',2,'kg','']]);
+  const cards=page.locator('.lane').first().locator('.ticket');
+  await cards.nth(3).waitFor();
+  assert.equal(await cards.evaluateAll(nodes=>new Set(nodes.map(n=>n.offsetTop)).size),1);
+  assert.match(await cards.first().innerText(),/4 un. de 1 kg cada/);
+  await page.screenshot({path:resolve(dir,'fila.png')});
+ }finally{await page.close();}
+}
+
 (async()=>{
  await new Promise(r=>server.listen(0,'127.0.0.1',r));
  const url='http://127.0.0.1:'+server.address().port;
@@ -46,6 +85,7 @@ async function until(fn,message){for(let i=0;i<100;i++){if(await fn())return;awa
    }
    return route.fulfill({json:[structuredClone(fixture)]});
   });
+  if(!live && process.argv.includes('--new-order'))await testNewOrder(contexts[1],url);
   let id=900001;
   if(live){
    const response=await contexts[0].request.post(base+'/rest/v1/rpc/create_order',{headers:{apikey},data:{payload}});

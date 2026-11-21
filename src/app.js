@@ -6,7 +6,7 @@ const catalog = [
   {id:"bm",cat:0,name:"Barca média",unit:"un.",size:"75 × 24 cm",budget:100},
   {id:"bg",cat:0,name:"Barca grande",unit:"un.",size:"100 × 24 cm",budget:200},
   {id:"dourada",cat:1,name:"Dourada",unit:"kg"},{id:"robalo",cat:1,name:"Robalo",unit:"kg"},{id:"salmao",cat:1,name:"Salmão",unit:"kg"},{id:"linguado",cat:1,name:"Linguado",unit:"kg"},{id:"sardinha",cat:1,name:"Sardinha",unit:"kg"},
-  {id:"ameijoa",cat:2,name:"Amêijoa",unit:"kg"},{id:"ostras",cat:2,name:"Ostras",unit:"dz."},{id:"lagosta",cat:2,name:"Lagosta viva",unit:"un."},{id:"mexilhao",cat:2,name:"Mexilhão",unit:"kg"},
+  {id:"gamba-costa",cat:2,name:"Gamba da costa",unit:"kg"},{id:"ameijoa",cat:2,name:"Amêijoa",unit:"kg"},{id:"ostras",cat:2,name:"Ostras",unit:"dz."},{id:"lagosta",cat:2,name:"Lagosta viva",unit:"un."},{id:"mexilhao",cat:2,name:"Mexilhão",unit:"kg"},
   {id:"camarao",cat:3,name:"Camarão cozido",unit:"kg"},{id:"sapateira",cat:3,name:"Sapateira cozida",unit:"un."},{id:"lavagante",cat:3,name:"Lavagante cozido",unit:"un."},
   {id:"polvo",cat:4,name:"Polvo congelado",unit:"kg"},{id:"tigre",cat:4,name:"Camarão tigre congelado",unit:"kg"},{id:"lulas",cat:4,name:"Lulas congeladas",unit:"kg"}
 ];
@@ -17,7 +17,7 @@ function lisbonDay(date=new Date()){
 function shiftDay(day,delta){ const d=new Date(day+"T12:00:00Z"); d.setUTCDate(d.getUTCDate()+delta);return d.toISOString().slice(0,10);}
 const product=id=>catalog.find(p=>p.id===id);
 const group=i=> i.product==="apoio"?"bancada":product(i.product).cat===0?"barcas":"bancada";
-const label=i=>i.product==="apoio"?"Cozedura para a barca":product(i.product)?.name||"Artigo";
+const label=i=>i.other?i.customName:i.product==="apoio"?"Cozedura para a barca":product(i.product)?.name||"Artigo";
 const unit=i=>i.product==="apoio"?"":i.unit||product(i.product)?.unit||"";
 const fmtQty=n=>Number(n).toLocaleString("pt-PT",{maximumFractionDigits:2});
 const code=id=>refs.get(Number(id))||String(id);
@@ -28,7 +28,7 @@ function lineDescription(i){
  if(i.product==="apoio")return i.note;
  const p=product(i.product);
  if(p.cat===0)return [i.people+" pessoas",i.use,fmtQty(i.budget)+" € de marisco"].join(" · ");
- return [fmtQty(i.qty)+" "+unit(i),i.cut,i.note].filter(Boolean).join(" · ");
+ return [i.byPiece?pieceText(i):fmtQty(i.qty)+" "+unit(i),i.cut,i.note].filter(Boolean).join(" · ");
 }
 
 const paths={
@@ -96,7 +96,7 @@ async function onlineRequest(url,data){
   return {orders:(await rest("orders?select=*,station_tasks(*),order_items(*)&business_date=eq."+encodeURIComponent(day))).map(convertRow)};
  }
  if(url==="/api/orders"){
-  const r=await rest("rpc/create_order",{payload:{customer_name:data.name.trim(),customer_type:data.type,fulfilment:data.delivery==="Entrega"?"entrega":"recolha",address:data.address,scheduled_time:data.time,business_date:data.day,source:data.channel==="Cliente"?"cliente":"equipa",priority:data.priority?"alta":"normal",notes:[data.note,data.phone?"Contacto: "+data.phone:""].filter(Boolean).join("\n"),client_token:data.requestKey,items:data.items.map(i=>{const p=product(i.product);return {category:catKeys[p.cat],product:p.name,quantity:i.qty,unit:unitKeys[p.unit],cut:p.cat===1?i.cut.toLowerCase():null,barca_size:p.cat===0?({bp:"pequena",bm:"media",bg:"grande"}[i.product]):null,meal_type:p.cat===0?(i.use==="Petisco"?"petisco":"refeicao"):null,people:p.cat===0?i.people:null,budget:p.cat===0?i.budget:null,notes:i.note};})}});
+  const r=await rest("rpc/create_order",{payload:{customer_name:data.name.trim(),customer_type:data.type,fulfilment:data.delivery==="Entrega"?"entrega":"recolha",address:data.address,scheduled_time:data.time,business_date:data.day,source:data.channel==="Cliente"?"cliente":"equipa",priority:data.priority?"alta":"normal",notes:[data.note,data.phone?"Contacto: "+data.phone:""].filter(Boolean).join("\n"),client_token:data.requestKey,items:data.items.map(i=>{const p=product(i.product);return {category:catKeys[p.cat],product:i.other?i.customName.trim():p.name,quantity:i.byPiece?Number((i.qty*i.weight).toFixed(2)):i.qty,unit:unitKeys[p.unit],cut:p.cat===1?i.cut.toLowerCase():null,barca_size:p.cat===0?({bp:"pequena",bm:"media",bg:"grande"}[i.product]):null,meal_type:p.cat===0?(i.use==="Petisco"?"petisco":"refeicao"):null,people:p.cat===0?i.people:null,budget:p.cat===0?i.budget:null,notes:[i.byPiece?pieceText(i):"",i.note].filter(Boolean).join(" · ")};})}});
   return {order:await readOne(r.id)};
  }
  const row=rawOrders.get(Number(url.split("/").at(-1)));if(!row)throw Error("Encomenda indisponível.");
@@ -280,11 +280,28 @@ function startOrder(cat=page==="preparacao"&&station==="bancada"?1:0){
 function defaultEntry(id){const p=product(id);return {product:id,qty:1,cut:p.cat===1?cuts[0]:"",people:p.cat===0?[3,6,10][catalog.filter(x=>x.cat===0).indexOf(p)]:1,use:"Refeição",budget:p.budget||0,note:""};}
 const opts=(items,v)=>items.map(([id,t])=>`<option value="${esc(id)}" ${String(v)===String(id)?"selected":""}>${esc(t)}</option>`).join("");
 const input=(label,key,value,attrs="")=>`<label class="field"><span>${label}</span><input data-field="${key}" value="${esc(value)}" ${attrs}></label>`;
+function pieceText(i){
+ return fmtQty(i.qty)+" un. de "+fmtQty(i.weight)+" kg cada";
+}
+function choices(title,key,options,selected){
+ const buttons=options.map(([value,text])=>`<button type="button" data-choice="${key}" data-value="${esc(value)}" aria-pressed="${String(value)===String(selected)}">${esc(text)}</button>`).join("");
+ return `<fieldset class="touch-options"><legend>${title}</legend><div>${buttons}</div></fieldset>`;
+}
+function seafoodEditor(p){
+ const pieces=p.cat===1 && entry.byPiece;
+ const qtyLabel=pieces?"Número de peixes":"Quantidade ("+p.unit+")";
+ return `${p.cat===1?choices("Como é vendido?","mode",[["total","Peso total"],["piece","À peça"]],pieces?"piece":"total"):""}
+ <div class="quantity-stepper">${input(qtyLabel,"i.qty",entry.qty,`type="number" min="${pieces||p.unit==="un."?1:0.01}" max="9999" step="${pieces||p.unit==="un."?1:0.01}" required`)}<button type="button" data-delta="-1" aria-label="Diminuir quantidade">−</button><button type="button" data-delta="1" aria-label="Aumentar quantidade">+</button></div>
+ ${pieces?choices("Peso por peixe","weight",[[0.5,"500 g"],[1,"1 kg"],[1.5,"1,5 kg"],[2,"2 kg"]],entry.weight)+input("Peso por peixe (kg)","i.weight",entry.weight,'type="number" min="0.01" max="999" step="0.01" required'):""}
+ ${p.cat===1?choices("Preparação","cut",cuts.map(c=>[c,c]),entry.cut):""}`;
+}
 function entryEditor(){
  const p=product(entry.product);
- return `<div class="editor"><div class="form-grid"><label class="field"><span>Categoria</span><select id="categoryPick">${opts(categories.map((t,n)=>[n,t]),p.cat)}</select></label><label class="field"><span>Produto</span><select id="productPick">${opts(catalog.filter(x=>x.cat===p.cat).map(x=>[x.id,x.name]),p.id)}</select></label></div>
+ return `<div class="editor">${choices("Categoria","category",categories.map((c,n)=>[n,c]),p.cat)}
+ ${choices("Produto","product",catalog.filter(x=>x.cat===p.cat).map(x=>[x.id,x.name]).concat(p.cat>0?[["other","Outro produto"]]:[]),entry.other?"other":p.id)}
+ ${entry.other?input("Nome do produto","i.customName",entry.customName,'maxlength="80" required pattern=".*\\S.*"'):""}
  ${p.cat===0?`<p class="boat-price">${icon("boat",16)} ${p.size} · Referência de ${p.budget} € em marisco por barca</p><div class="form-grid three">${input("N.º de barcas","i.qty",entry.qty,'type="number" min="1" max="9999" step="1" required')}${input("Pessoas por barca","i.people",entry.people,'type="number" min="1" max="300" step="1" required')}${input("Marisco por barca (€)","i.budget",entry.budget,'type="number" min="1" max="10000" step="0.01" required')}</div><label class="field"><span>Tipo de serviço</span><select data-field="i.use">${opts(["Refeição","Petisco"].map(x=>[x,x]),entry.use)}</select></label>`:
- `<div class="form-grid">${input("Quantidade ("+p.unit+")","i.qty",entry.qty,`type="number" min="${p.unit==="un."?1:"0.01"}" max="9999" step="${p.unit==="un."?1:"0.01"}" required`)}${p.cat===1?`<label class="field"><span>Preparação</span><select data-field="i.cut">${opts(cuts.map(x=>[x,x]),entry.cut)}</select></label>`:""}</div>`}
+ seafoodEditor(p)}
  ${input("Instruções do artigo (opcional)","i.note",entry.note,'maxlength="200" placeholder="Ex. embalar em separado"')}
  <button type="submit" class="btn outline">${icon(editIndex<0?"plus":"check",16)}${editIndex<0?"Adicionar à encomenda":"Guardar artigo"}</button>${editIndex>=0?button("","Cancelar edição","canceledit","minor"):""}</div>`;
 }
@@ -309,13 +326,14 @@ async function submitOrder(){
  }catch(e){hadFormError=e.message||"Não foi possível registar o pedido.";busy=false;drawForm();dialog.scrollTop=0;}finally{busy=false;}
 }
 document.addEventListener("input",e=>{
- const t=e.target;if(t.id==="search"){query=t.value;rerenderResults();return;}
+ const t=e.target;
+ if(t.dataset.field==="i.weight")panel.querySelectorAll('[data-choice="weight"]').forEach(b=>b.setAttribute("aria-pressed",Number(b.dataset.value)===Number(t.value)));
+ if(t.id==="search"){query=t.value;rerenderResults();return;}
  if(t.dataset.field&&draft){const [who,k]=t.dataset.field.split(".");(who==="i"?entry:draft)[k]=t.type==="checkbox"?t.checked:t.value;}
 });
 document.addEventListener("change",e=>{
  const t=e.target;
  if(t.id==="orderDay"){setDay(t.value);return;}
- if(t.id==="productPick"||t.id==="categoryPick"){entry=defaultEntry(t.id==="productPick"?t.value:catalog.find(p=>p.cat===+t.value).id);drawForm();return;}
  if(t.dataset.field==="o.delivery"){draft.delivery=t.value;drawForm();return;}
  if(t.dataset.line){mutate(findOrder(detailId),"line",{station:t.dataset.s,line:+t.dataset.line,done:t.checked});return;}
  if(t.dataset.step){mutate(findOrder(detailId),"boat",{station:"barcas",step:t.dataset.step,value:t.type==="checkbox"?t.checked:t.value});return;}
@@ -327,8 +345,29 @@ document.addEventListener("submit",e=>{
  if(e.target.id==="orderForm"){e.preventDefault();submitOrder();}
 });
 document.addEventListener("click",async e=>{
+ const picker=e.target.closest(".field")?.querySelector('input[type="date"],input[type="time"]');
+ if(picker?.showPicker){try{picker.focus();picker.showPicker();e.preventDefault();return;}catch{/* Use the native input. */}}
  if(e.target===dialog){const rect=dialog.getBoundingClientRect();if(e.clientX<rect.left||e.clientX>rect.right||e.clientY<rect.top||e.clientY>rect.bottom){if(!busy)dialog.close();}return;}
  const b=e.target.closest("button");if(!b){if(menu&&!e.target.closest(".filterwrap")){menu="";render();}return;}
+ if(b.dataset.choice){
+  if(b.getAttribute("aria-pressed")==="true")return;
+  const {choice,value}=b.dataset;
+  if(choice==="category")entry=defaultEntry(catalog.find(p=>p.cat===Number(value)).id);
+  if(choice==="product"){
+   const category=product(entry.product).cat;
+   entry=defaultEntry(value==="other"?catalog.find(p=>p.cat===category && p.unit==="kg").id:value);
+   entry.other=value==="other";
+  }
+  if(choice==="mode"){entry.byPiece=value==="piece";entry.qty=1;entry.weight=entry.weight||0.5;}
+  if(choice==="weight")entry.weight=Number(value);
+  if(choice==="cut")entry.cut=value;
+  drawForm();return;
+ }
+ if(b.dataset.delta){
+  const field=panel.querySelector('[data-field="i.qty"]');
+  field.value=Number(Math.min(Number(field.max),Math.max(Number(field.min),Number(field.value)+Number(b.dataset.delta))).toFixed(2));
+  field.dispatchEvent(new Event("input",{bubbles:true}));return;
+ }
  if(b.dataset.station){selectStation(b.dataset.station);return;}
  if(b.dataset.filter){filter=b.dataset.filter;menu="";render();return;}
  if(b.dataset.list){listState=b.dataset.list;rerenderResults();return;}
