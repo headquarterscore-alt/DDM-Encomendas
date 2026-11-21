@@ -26,11 +26,11 @@
   "shortcuts": [
     {
       "name": "Posto 1 · Peixe-Marisco",
-      "url": "./#preparacao/bancada"
+      "url": "./#encomendas/bancada"
     },
     {
       "name": "Posto 2 · Barcas",
-      "url": "./#preparacao/barcas"
+      "url": "./#encomendas/barcas"
     }
   ]
 }

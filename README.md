@@ -31,11 +31,11 @@ Para gerar a pasta publicável localmente, usa Node.js 22.12 ou superior e execu
 
 Seleciona **Peixe-Marisco** ou **Barcas** e ativa o botão **Modo posto** no cabeçalho. O posto e o modo ficam guardados neste navegador/dispositivo, incluindo ao reabrir a app pelo endereço inicial. Os atalhos específicos da app escolhem e guardam o posto indicado. Sair do ecrã inteiro do navegador mantém o modo posto; o botão da app permite sair desse modo. Num dispositivo novo, abre o Posto 1 · Peixe-Marisco. O identificador interno `bancada` mantém os atalhos e preferências existentes compatíveis.
 
-O topo mostra o posto, data de hoje, relógio de Lisboa, ligação, ecrã inteiro e Nova encomenda. A navegação **Preparação · Encomendas · Cliente** permanece disponível também em modo posto. A data do cabeçalho é a data atual; o seletor **Dia das encomendas** continua a controlar o dia da fila. O selo Modo demo foi retirado, sem alterar a base de dados ou o funcionamento de Nova encomenda.
+**Encomendas** (`#encomendas`) abre o posto guardado. Os atalhos `#encomendas/bancada` e `#encomendas/barcas` escolhem o posto. Os antigos atalhos `#preparacao` continuam a abrir a fila. **Histórico** (`#historico`) mostra a lista do dia e **Cliente** (`#cliente`) abre o catálogo.
 
-Próxima fase acordada: questionário de barca em Cliente e circuito **Aceitar · Contactar · Recusar** apenas para pedidos de clientes/website, antes da preparação. A integração com `ddm-website` e a alteração de Nova encomenda ficam para essa fase. Esta revisão não altera a base de dados.
+Toca em **Iniciar** e depois em **Barca pronta** ou **Preparação pronta**. O marisco da barca pertence ao posto Barcas. O levantamento ou a entrega só pode ser confirmado quando todos os postos da encomenda estiverem prontos. Os filtros mostram as encomendas do estado escolhido. No telemóvel, cada filtro de estado abre apenas a respetiva coluna; **Todas** mostra as três em sequência.
 
-Nas Barcas, os cartões permitem iniciar, registar recolha, confirmar cozedura feita ou dispensada, registar montagem e concluir. O marisco da barca pertence sempre às Barcas. Em Peixe-Marisco, cada produto tem a sua quantidade, unidade e corte; concluir a preparação confirma todos os produtos desse posto. Uma encomenda mista só disponibiliza **Registar entrega** depois de ambos os postos estarem prontos.
+Antes de publicar este fluxo, rever e aprovar [a alteração de update_task](migrations/001_fluxo_postos.sql). A função em produção exige os três passos antigos para concluir a barca. A migração preserva as colunas e os pedidos das versões anteriores da app.
 
 As ações ficam bloqueadas durante a gravação ou sem ligação. A confirmação **Alteração guardada** só aparece após a resposta da base e a leitura do estado guardado. Se houver erro, a app atualiza a encomenda e pede para confirmar o estado antes de repetir.
 
@@ -50,14 +50,8 @@ npm run build
 npm test
 ```
 
-O teste usa duas sessões de navegador com armazenamento independente e uma API simulada partilhada. Cobre a encomenda mista, unidades por artigo, etapas das Barcas (cozedura feita e dispensada), bloqueio da entrega, toques repetidos, erro de gravação, perda/recuperação de ligação, reabertura por dispositivo e alvos táteis de pelo menos 56 px. `DDM_BROWSER=chrome` permite usar o Chrome instalado; `msedge` usa o Edge.
+O teste usa duas sessões de navegador com armazenamento independente e uma API simulada partilhada. Cobre a encomenda mista, unidades por artigo, conclusão independente das Barcas, filtros por estado, bloqueio da entrega, toques repetidos, erro de gravação, perda/recuperação de ligação, reabertura por dispositivo e alvos táteis de pelo menos 56 px. `DDM_BROWSER=chrome` permite usar o Chrome instalado; `msedge` usa o Edge.
 
 Os testes não alteram `docs/`. Para refazer as imagens dos postos, junta `--update-images` (por exemplo `node tests/postos.cjs --update-images`).
 
 `npm run test:live` repete o percurso essencial na base de demonstração: **cria uma encomenda fictícia identificada como TESTE POSTOS**, conclui os dois postos e regista a entrega para a retirar da fila. Não executar contra uma base de produção. As duas sessões só partilham os dados do servidor, nunca o armazenamento local.
-
-Evidência de 21/11/2026: teste real concluído com `DM-1121-113`. A barca terminou com a Bancada ainda por iniciar; a entrega só ficou disponível depois da conclusão da Bancada; as duas sessões reabriram no posto e modo guardados. A encomenda fictícia foi marcada como entregue. As imagens mostram essa mesma encomenda durante a preparação:
-
-| Barcas | Bancada |
-| --- | --- |
-| ![Posto Barcas](docs/postos/barcas.png) | ![Posto Bancada](docs/postos/bancada.png) |
