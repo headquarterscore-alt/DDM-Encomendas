@@ -20,7 +20,7 @@ const group=i=>product(i.product).cat===0?"barcas":"bancada";
 const label=i=>product(i.product)?.name||"Artigo";
 const unit=i=>i.unit||product(i.product)?.unit||"";
 const fmtQty=n=>Number(n).toLocaleString("pt-PT",{maximumFractionDigits:2});
-const code=id=>refs.get(Number(id))||String(id);
+const code=id=>refs.get(id)||String(id);
 const globalState=o=>Object.values(o.tasks).every(v=>v===2)?2:Object.values(o.tasks).some(v=>v>0)?1:0;
 const typeName=o=>o.type==="restaurante"?"Restaurante":"Particular";
 function lineDescription(i){
@@ -60,11 +60,11 @@ const dayNow=()=>lisbonDay();
 let page="encomendas",station="bancada",day=dayNow(),orders=[],loaded=false,synced=false,loading=false,serial=0;
 let syncError=false;let filter="all",listState="all",focusMode=false,detailId=null,busy=false,dialogMode="",draft=null,entry=null,editIndex=-1;
 let savingId=null,saveMessage="";
-try{focusMode=localStorage.getItem("ddm-modo-posto")==="true";}catch{}
+try{station=localStorage.getItem("ddm-posto")==="barcas"?"barcas":"bancada";focusMode=localStorage.getItem("ddm-modo-posto")==="true";}catch{}
 const dialog=$("#dialog"),panel=$("#dialogContent"),main=$("#main");
 const dateText=(d,opts)=>new Intl.DateTimeFormat("pt-PT",opts).format(new Date(d+"T12:00:00Z"));
-const findOrder=id=>orders.find(o=>o.id===Number(id));
-const byTime=(a,b)=>Number(b.priority)-Number(a.priority)||a.time.localeCompare(b.time)||a.id-b.id;
+const findOrder=id=>orders.find(o=>o.id===id);
+const byTime=(a,b)=>Number(b.priority)-Number(a.priority)||a.time.localeCompare(b.time)||a.id.localeCompare(b.id);
 const fullDate=d=>dateText(d,{weekday:"long",day:"numeric",month:"long",year:"numeric"});
 function notice(msg){const t=$("#toast");t.textContent=msg;t.classList.add("on");clearTimeout(notice.timer);notice.timer=setTimeout(()=>t.classList.remove("on"),4200);}
 const base="https://c--1d4e2f3e-c086-4293-8fd9-9ee55c295b01-prod.lovable.cloud", publicKey="sb_publishable_dt7LHmnqzFD-dD54yp77GA_YIya6oQJ";
@@ -81,13 +81,13 @@ async function rest(path,payload){
  return j??{};
 }
 function convertRow(o){
- const id=Number(o.ref.split("-").at(-1));refs.set(id,o.ref);rawOrders.set(id,o);
+ const id=o.id;refs.set(id,o.ref);rawOrders.set(id,o);
  const tasks=Object.fromEntries(o.station_tasks.map(t=>[t.station,statusKeys.indexOf(t.status)]));
  const items=o.order_items.sort((a,b)=>a.position-b.position).map((i,k)=>{
  let p=catalog.find(p=>p.name===i.product&&catKeys[p.cat]===i.category);
  if(!p){p={id:"custom-"+i.category+"-"+i.product,cat:catKeys.indexOf(i.category),name:i.product,unit:{"kg":"kg","un":"un.","dz":"dz."}[i.unit]||"un."};catalog.push(p);}
  return {product:p.id,line:k+1,qty:Number(i.quantity||1),unit:({kg:"kg",un:"un.",dz:"dz."})[i.unit]||i.unit,note:i.notes||"",people:i.people,size:p.size||i.barca_size||"",use:i.meal_type==="petisco"?"Petisco":"Refeição",budget:i.budget,cut:i.cut?i.cut[0].toUpperCase()+i.cut.slice(1):"",done:tasks[catKeys[p.cat]==="barcas"?"barcas":"bancada"]===2};});
- return {id,version:o.station_tasks.reduce((s,t)=>s+t.version,0),name:o.customer_name,type:o.customer_type,day:o.business_date,time:o.scheduled_time.slice(0,5),delivery:o.fulfilment==="entrega"?"Entrega":"Levantamento",address:o.address,priority:o.priority!=="normal",note:o.notes,channel:o.source==="cliente"?"Cliente":"Equipa",handed:o.status==="entregue",items,tasks};
+ return {id,revision:o.history_version??0,cancelled:o.status==="cancelada",reason:o.cancel_reason,version:o.station_tasks.reduce((s,t)=>s+t.version,0),name:o.customer_name,type:o.customer_type,day:o.business_date,time:o.scheduled_time.slice(0,5),delivery:o.fulfilment==="entrega"?"Entrega":"Levantamento",address:o.address,priority:o.priority!=="normal",note:o.notes,channel:o.source==="cliente"?"Cliente":"Equipa",handed:o.status==="entregue",items,tasks};
 }
 async function readOne(uuid){const rows=await rest("orders?select=*,station_tasks(*),order_items(*)&id=eq."+encodeURIComponent(uuid));return convertRow(rows[0]);}
 async function onlineRequest(url,data){
@@ -99,15 +99,17 @@ async function onlineRequest(url,data){
   const r=await rest("rpc/create_order",{payload:{customer_name:data.name.trim(),customer_type:data.type,fulfilment:data.delivery==="Entrega"?"entrega":"recolha",address:data.address,scheduled_time:data.time,business_date:data.day,source:data.channel==="Cliente"?"cliente":"equipa",priority:data.priority?"alta":"normal",notes:[data.note,data.phone?"Contacto: "+data.phone:""].filter(Boolean).join("\n"),client_token:data.requestKey,items:data.items.map(i=>{const p=product(i.product);return {category:catKeys[p.cat],product:p.name,quantity:i.qty,unit:unitKeys[p.unit],cut:p.cat===1?i.cut.toLowerCase():null,barca_size:p.cat===0?({bp:"pequena",bm:"media",bg:"grande"}[i.product]):null,meal_type:p.cat===0?(i.use==="Petisco"?"petisco":"refeicao"):null,people:p.cat===0?i.people:null,budget:p.cat===0?i.budget:null,notes:i.note};})}});
   return {order:await readOne(r.id)};
  }
- const row=rawOrders.get(Number(url.split("/").at(-1)));if(!row)throw Error("Encomenda indisponível.");
- if(data.action==="handoff"){await rest("rpc/hand_off",{p_order_id:row.id});}
+ const row=rawOrders.get(url.split("/").at(-1));if(!row)throw Error("Encomenda indisponível.");
+ if(["handoff","undo","cancel","reopen"].includes(data.action)){
+  await rest("rpc/change_order_status",{p_order_id:row.id,p_action:data.action,p_station:station,p_version:data.revision,p_reason:data.reason||null});
+ }
  else{
  if(data.version!==row.station_tasks.reduce((sum,t)=>sum+t.version,0))throw Object.assign(Error("Outro posto alterou a encomenda. Confirma o novo estado."),{status:409});
  const t=row.station_tasks.find(t=>t.station===data.station);const patch={};
  if(!t)throw Error("Posto indisponível.");
  if(data.action==="advance"||data.action==="back"){
  const n=statusKeys.indexOf(t.status)+(data.action==="advance"?1:-1);if(n<0||n>2)throw Error("Atualiza o posto.");
- patch.status=statusKeys[n];
+ patch.status=statusKeys[n];patch.device_station=station;
  }else throw Error("Ação indisponível.");
  await rest("rpc/update_task",{p_task_id:t.id,p_expected_version:t.version,p_patch:patch});
  }
@@ -155,8 +157,8 @@ function renderSync(){
  document.querySelectorAll(".sync").forEach(el=>{el.classList.toggle("off",!synced);el.innerHTML=`<span></span>${synced?"Ligado":networkProblem?"Sem ligação":"A ligar"}`;el.title=lastSync?"Última leitura às "+new Date(lastSync).toLocaleTimeString("pt-PT",{timeZone:"Europe/Lisbon"}):"Ligação à base de dados da equipa";});
  const b=document.getElementById("networkStatus");
  b.hidden=!networkProblem;b.querySelector("span").textContent=lastSync?"Sem ligação. A última leitura foi às "+new Date(lastSync).toLocaleTimeString("pt-PT")+". Volta a ligar para guardar alterações.":"Não foi possível carregar as encomendas da equipa. Verifica a ligação e tenta novamente.";
- document.querySelectorAll("[data-advance],[data-task],[data-handoff]").forEach(el=>{el.disabled=busy||!synced;});
- document.querySelectorAll("[data-saving]").forEach(el=>{el.textContent=Number(el.dataset.saving)===savingId?saveMessage:"";});
+ document.querySelectorAll("[data-advance],[data-task],[data-handoff],[data-confirm],[data-quick-undo],#historyConfirm button[type=submit]").forEach(el=>{el.disabled=busy||!synced;});
+ document.querySelectorAll("[data-saving]").forEach(el=>{el.textContent=el.dataset.saving===savingId?saveMessage:"";});
  const status=$("#writeStatus");status.textContent=saveMessage;
 }
 const button=(name,text,act,extra="")=>`<button type="button" class="btn ${extra}" data-act="${act}">${name?icon(name):""}${text}</button>`;
@@ -201,7 +203,7 @@ function orderCard(o,n){
 }
 function empty(text){return `<div class="empty">${icon("bando",24)}<span>${text}</span></div>`;}
 function boardContent(){
- const shown=orders.filter(o=>!o.handed && o.tasks[station]!==undefined).sort(byTime);
+ const shown=orders.filter(o=>!o.cancelled && !o.handed && o.tasks[station]!==undefined).sort(byTime);
  const lanes=states.map((title,n)=>{
   const excluded=filter!=="all" && filter!==statusKeys[n];
   const row=excluded?[]:shown.filter(o=>o.tasks[station]===n);
@@ -216,14 +218,15 @@ function boardContent(){
  return `<div class="board">${lanes.join("")}</div>`;
 }
 function listContent(){
- const items=orders.filter(o=>listState==="all"||listState==="entregues"&&o.handed||listState==="ativas"&&!o.handed).sort(byTime);
- return `<div class="list-tabs">${[["all","Todas"],["ativas","Em aberto"],["entregues","Entregues"]].map(([key,t])=>`<button data-list="${key}" class="${key===listState?"active":""}">${t}</button>`).join("")}</div><div class="order-table"><div class="table-row table-head"><span>Encomenda</span><span>Cliente</span><span>Hora prevista</span><span>Postos</span><span>Estado</span></div>${items.map(o=>`<button data-detail="${o.id}" class="table-row"><strong>${code(o.id)}</strong><span>${esc(o.name)}<small>${typeName(o)}</small></span><span>${esc(o.time)}<small>${esc(o.delivery)}</small></span><span>${Object.keys(o.tasks).map(k=>stations[k]).join(" + ")}</span><span>${o.handed?`<span class="delivered">${icon("check",14)} Entregue</span>`:statusPill(globalState(o))}</span></button>`).join("")||empty("Sem encomendas para estes critérios.")}</div>`;
+ const stateKey=o=>o.cancelled?"cancelada":o.handed?"entregue":statusKeys[globalState(o)];
+ const items=orders.filter(o=>listState==="all"||listState===stateKey(o)).sort(byTime);
+ return `<div class="list-tabs">${[["all","Todas"],...statusKeys.map((key,n)=>[key,states[n]]),["entregue","Entregues"],["cancelada","Canceladas"]].map(([key,t])=>`<button data-list="${key}" aria-pressed="${key===listState}" class="${key===listState?"active":""}">${t}</button>`).join("")}</div><div class="order-table"><div class="table-row table-head"><span>Encomenda</span><span>Cliente</span><span>Hora prevista</span><span>Postos</span><span>Estado</span></div>${items.map(o=>`<button data-detail="${o.id}" class="table-row"><strong>${code(o.id)}</strong><span>${esc(o.name)}<small>${typeName(o)}</small></span><span>${esc(o.time)}<small>${esc(o.delivery)}</small></span><span>${Object.keys(o.tasks).map(k=>stations[k]).join(" + ")}</span><span>${o.cancelled?"Cancelada":o.handed?`<span class="delivered">${icon("check",14)} Entregue</span>`:statusPill(globalState(o))}</span></button>`).join("")||empty("Sem encomendas para estes critérios.")}</div>`;
 }
 function clientContent(){return `<div class="client-intro"><div><span class="station-num">ENCOMENDAS</span><h2>O que vai levar?</h2><p>Escolha os artigos, a preparação e a hora pretendida.</p>${button("bag","Começar encomenda","new","primary")}</div><div class="client-art"></div></div><h2 class="catalog-title">Escolher por categoria</h2><div class="cat-grid">${categories.map((c,n)=>`<button type="button" data-startcat="${n}"><span class="cat-symbol">${icon(categoryIcons[n],28)}</span><strong>${c}</strong><span>${catalog.filter(p=>p.cat===n).length} opções ${icon("right",14)}</span></button>`).join("")}</div><p class="helptext">${icon("info",16)} Demonstração. Os pedidos entram apenas nos postos de teste.</p>`;}
 function render(){
  document.title=(page==="encomendas"?"Encomendas":page==="cliente"?"Cliente":"Histórico")+" · Delicias do Mar";
  document.querySelectorAll("[data-nav]").forEach(a=>{a.classList.toggle("active",a.dataset.nav===page);if(a.dataset.nav===page)a.setAttribute("aria-current","page");else a.removeAttribute("aria-current");});
- const total=page==="encomendas"?orders.filter(o=>!o.handed&&o.tasks[station]!==undefined).length:orders.length;
+ const total=page==="encomendas"?orders.filter(o=>!o.cancelled&&!o.handed&&o.tasks[station]!==undefined).length:orders.length;
  main.innerHTML=header()+(page==="cliente"?clientContent():(page==="encomendas"?stationCards():"")+toolbar(total)+`<div id="results">${page==="encomendas"?boardContent():listContent()}</div>`)+`<footer><span>Delicias do Mar <b>·</b> Loulé</span><span>${icon("waves",19)} Central de encomendas</span></footer>`;
  updateClock();renderSync();
 }
@@ -231,44 +234,73 @@ function rerenderResults(){const el=$("#results");if(el)el.innerHTML=page==="enc
 function setDay(d){if(!d||d===day)return;day=d;orders=[];loaded=false;synced=false;render();sync();}
 function updateOrder(o){if(o.day!==day)return;const i=orders.findIndex(x=>x.id===o.id);if(i<0)orders.push(o);else if(orders[i].version<=o.version)orders[i]=o;}
 async function mutate(o,action,extra={}){
- if(busy||!o||o.handed)return;
+ if(busy||!o||(o.handed&&action!=="undo")||(o.cancelled&&action!=="reopen"))return;
  const target=extra.station||station;
  if(action==="handoff"&&globalState(o)!==2)return;
  busy=true;savingId=o.id;saveMessage="A guardar…";++serial;renderSync();
  try{
- const send=version=>request("/api/orders/"+o.id,{version,action,station:target,...extra});
+ const send=version=>request("/api/orders/"+o.id,{version,revision:o.revision,action,station:target,...extra});
  let result;
  try{result=await send(o.version);}catch(error){
-  if(error.status!==409||action==="handoff")throw error;
+  if(error.status!==409||!["back","advance"].includes(action))throw error;
   const fresh=(await request("/api/orders?day="+encodeURIComponent(o.day))).orders.find(x=>x.id===o.id);
   const signature=x=>JSON.stringify([x.tasks[target],x.items.filter(i=>group(i)===target)]);
-  if(!fresh||fresh.handed||signature(fresh)!==signature(o))throw error;
+  if(!fresh||fresh.handed||fresh.cancelled||signature(fresh)!==signature(o))throw error;
   result=await send(fresh.version);
  }
  const {order}=result;
  ++serial;updateOrder(order);synced=true;networkProblem=false;lastSync=Date.now();saveMessage="Alteração guardada.";render();if(dialog.open&&dialogMode==="detail")drawDetail();
  if(action==="advance")notice(order.tasks[extra.station||station]===2?"Preparação concluída.":"Preparação iniciada.");
- if(action==="handoff")notice(o.delivery==="Entrega"?"Entrega confirmada.":"Levantamento confirmado.");
+ if(action==="handoff"){
+  if(dialog.open)dialog.close();
+  offerUndo(order);
+ }
+ if(action==="undo"){clearUndo();notice("A encomenda voltou a Pronta.");}
+ if(action==="cancel")notice("Encomenda cancelada.");
+ if(action==="reopen")notice("Encomenda reaberta.");
  }catch(e){saveMessage="Não foi possível confirmar. A atualizar o estado…";notice(e.message||"Não foi possível guardar.");busy=false;await sync();if(dialog.open&&dialogMode==="detail")drawDetail();saveMessage="Confirma o estado antes de tentar novamente.";}
  finally{busy=false;renderSync();}
 }
 function openDialog(mode){dialogMode=mode;dialog.classList.toggle("form-dialog",mode==="order");if(!dialog.open)dialog.showModal();dialog.scrollTop=0;}
 const modalHead=(eyebrow,title)=>`<div class="modal-head"><div><div class="kicker">${eyebrow}</div><h2 id="dialog-title">${title}</h2></div><button class="close" type="button" data-act="close" aria-label="Fechar">${icon("close",20)}</button></div>`;
-function openDetail(id){detailId=Number(id);openDialog("detail");drawDetail();}
+const undoLabel=o=>o.delivery==="Entrega"?"Desfazer entrega":"Desfazer levantamento";
+let undoOrder=null,undoTimer,undoUntil=0;
+function clearUndo(){
+ clearTimeout(undoTimer);undoOrder=null;$("#undoNotice").hidden=true;
+}
+function offerUndo(o){
+ clearUndo();undoOrder=o;undoUntil=Date.now()+8000;
+ const box=$("#undoNotice");
+ box.querySelector("span").textContent=o.delivery==="Entrega"?"Entrega confirmada.":"Levantamento confirmado.";
+ box.hidden=false;undoTimer=setTimeout(clearUndo,8000);
+}
+let confirmOrder=null;
+function confirmHistory(o,action){
+ confirmOrder=o;openDialog("confirm");
+ const cancel=action==="cancel";
+ panel.innerHTML=modalHead(esc(code(o.id)),cancel?"Cancelar encomenda":undoLabel(o))+`<form class="modal-body" id="historyConfirm" data-action="${action}">
+ <p>${esc(o.name)} · ${esc(o.time)}</p>
+ ${cancel?`<label class="field"><span id="reasonLabel">Motivo</span><select id="cancelReason" aria-labelledby="reasonLabel" required><option value="">Escolher motivo</option><option>Pedido do cliente</option><option>Artigo indisponível</option><option>Encomenda duplicada</option><option>Outro</option></select></label><label class="field" id="otherReason" hidden>Qual é o motivo?<input maxlength="200"></label>`:"<p>A encomenda voltará à fila de prontas.</p>"}
+ <div class="history-actions"><button type="button" class="btn" data-detail="${o.id}">Voltar</button><button type="submit" class="btn primary">${cancel?"Confirmar cancelamento":"Confirmar"}</button></div></form>`;
+ renderSync();
+}
+function openDetail(id){detailId=id;openDialog("detail");drawDetail();}
 function workControls(o,s){
  const n=o.tasks[s];
  return `<div class="task-head"><h3>${icon(s==="barcas"?"boat":"fish")} ${stations[s]}</h3>${statusPill(n)}</div>
  <div class="task-lines">${o.items.filter(i=>group(i)===s).map(i=>`<div class="task-line">${icon(n===2?"checked":s==="barcas"?"boat":"fish",18)}<div><strong>${esc(label(i))}${i.qty>1&&s==="barcas"?" × "+fmtQty(i.qty):""}</strong><small>${esc(lineDescription(i))}${s==="barcas"&&i.note?" · "+esc(i.note):""}</small></div></div>`).join("")}</div>
- ${o.handed?"":`<div class="task-btns">${n>0?`<button class="btn minor" data-task="back" data-s="${s}">${n===1?"Voltar a por iniciar":"Reabrir preparação"}</button>`:""}${n<2?`<button class="btn dark" data-task="advance" data-s="${s}">${icon(n?"check":"play",15)}${advanceLabel(s,n)}</button>`:""}</div>`}`;
+ ${o.handed||o.cancelled?"":`<div class="task-btns">${n>0?`<button class="btn minor" data-task="back" data-s="${s}">${n===1?"Voltar a por iniciar":"Reabrir preparação"}</button>`:""}${n<2?`<button class="btn dark" data-task="advance" data-s="${s}">${icon(n?"check":"play",15)}${advanceLabel(s,n)}</button>`:""}</div>`}`;
 }
 function drawDetail(){
  const o=findOrder(detailId);if(!o)return;
  const pos=dialog.scrollTop;
- const state=o.handed?"Entregue":globalState(o)===2?"Pronta para entrega":globalState(o)===1?"Em preparação":"Por iniciar";
+ const state=o.cancelled?"Cancelada":o.handed?"Entregue":globalState(o)===2?"Pronta para entrega":globalState(o)===1?"Em preparação":"Por iniciar";
  panel.innerHTML=modalHead(`${code(o.id)} · ${esc(o.channel)}`,esc(o.name))+`<div class="modal-body"><div class="detail-info"><span>${icon("calendar",16)}${dateText(o.day,{day:"numeric",month:"short"})} · ${esc(o.time)}</span><span>${icon(modeIcon(o),16)}${esc(o.delivery)}</span><span>${icon("user",16)}${typeName(o)}</span></div>
  ${o.address?`<p class="detail-contact">${esc(o.address)}</p>`:""}${o.note?`<div class="note">${icon("note",17)}<div><strong>Notas de preparação</strong><p>${esc(o.note)}</p></div></div>`:""}
  ${Object.keys(o.tasks).sort((a,b)=>a===station?-1:b===station?1:0).map(s=>`<section class="task">${workControls(o,s)}</section>`).join("")}
- <div class="global"><div><small>Estado da encomenda completa</small><strong>${state}</strong></div>${globalState(o)===2&&!o.handed?`<button class="btn primary" data-task="handoff">${icon("bag",16)} ${handoffLabel(o)}</button>`:""}</div></div>`;
+ <div class="global"><div><small>Estado da encomenda completa</small><strong>${state}</strong></div>${globalState(o)===2&&!o.handed&&!o.cancelled?`<button class="btn primary" data-task="handoff">${icon("bag",16)} ${handoffLabel(o)}</button>`:""}</div>
+ ${o.cancelled?`<p>Motivo: ${esc(o.reason)}</p>`:""}
+ <div class="history-actions">${o.cancelled?'<button class="btn" data-task="reopen">Reabrir</button>':o.handed?`<button class="btn" data-confirm="undo">${undoLabel(o)}</button>`:'<button class="btn" data-confirm="cancel">Cancelar encomenda</button>'}</div></div>`;
  dialog.scrollTop=pos;
  renderSync();
 }
@@ -320,11 +352,19 @@ document.addEventListener("input",e=>{
 });
 document.addEventListener("change",e=>{
  const t=e.target;
+ if(t.id==="cancelReason"){const other=$("#otherReason");other.hidden=t.value!=="Outro";other.querySelector("input").required=!other.hidden;return;}
  if(t.id==="orderDay"){setDay(t.value);return;}
  if(t.id==="productPick"||t.id==="categoryPick"){entry=defaultEntry(t.id==="productPick"?t.value:catalog.find(p=>p.cat===+t.value).id);drawForm();return;}
  if(t.dataset.field==="o.delivery"){draft.delivery=t.value;drawForm();return;}
 });
 document.addEventListener("submit",e=>{
+ if(e.target.id==="historyConfirm"){
+  e.preventDefault();
+  const action=e.target.dataset.action;
+  const reason=$("#cancelReason")?.value==="Outro"?$("#otherReason input").value.trim():$("#cancelReason")?.value;
+  if(action==="cancel"&&!reason){notice("Indique um motivo.");return;}
+  dialogMode="detail";drawDetail();mutate(confirmOrder,action,{reason});return;
+ }
  if(e.target.id==="itemForm"){e.preventDefault();if(editIndex<0&&draft.items.length>=50){notice("Máximo de 50 artigos por encomenda.");return;}
  const p=product(entry.product);const item={...entry,qty:Number(entry.qty),people:Number(entry.people),budget:Number(entry.budget)};
  if(editIndex>=0)draft.items[editIndex]=item;else draft.items.push(item);editIndex=-1;entry=defaultEntry(p.id);drawForm();notice("Artigo guardado na encomenda.");}
@@ -336,6 +376,8 @@ document.addEventListener("click",async e=>{
  if(b.dataset.station){selectStation(b.dataset.station);return;}
  if(b.dataset.filter){filter=b.dataset.filter;render();document.querySelector(`[data-filter="${filter}"]`).focus();return;}
  if(b.dataset.list){listState=b.dataset.list;rerenderResults();return;}
+ if(b.hasAttribute("data-quick-undo")){if(undoOrder&&Date.now()<undoUntil)await mutate(undoOrder,"undo");return;}
+ if(b.dataset.confirm){confirmHistory(findOrder(detailId),b.dataset.confirm);return;}
  if(b.dataset.detail){openDetail(b.dataset.detail);return;}
  if(b.dataset.advance){await mutate(findOrder(b.dataset.advance),"advance",{station:b.dataset.s||station});return;}
  if(b.dataset.handoff){await mutate(findOrder(b.dataset.handoff),"handoff");return;}

@@ -18,7 +18,7 @@ const payload={customer_name:customer,customer_type:'restaurante',fulfilment:'re
 ]};
 // Dourada is kg in the real catalog; use the catalog unit in the live fixture.
 if(live)payload.items[2].unit='kg';
-const fixture={id:'test-mixed',ref:'DDM-900001',...payload,status:'por_iniciar',scheduled_time:'19:30:00',order_items:payload.items.map((x,position)=>({...x,position})),station_tasks:['barcas','bancada'].map(station=>({id:station,station,status:'por_iniciar',version:0,shellfish_collected:false,cooking:'por_cozer',assembly_done:false}))};
+const fixture={id:'test-mixed',ref:'DDM-900001',...payload,status:'ativa',history_version:0,scheduled_time:'19:30:00',order_items:payload.items.map((x,position)=>({...x,position})),station_tasks:['barcas','bancada'].map(station=>({id:station,station,status:'por_iniciar',version:0,shellfish_collected:false,cooking:'por_cozer',assembly_done:false}))};
 let mutations=0,failNext=false;
 const server=createServer((req,res)=>{
  try{const path=req.url.split('?')[0];const file=resolve(root,'dist',path==='/'?'index.html':'.'+path);if(!file.startsWith(resolve(root,'dist')+require('node:path').sep))throw Error();res.setHeader('Content-Type',file.endsWith('.js')?'text/javascript':file.endsWith('.css')?'text/css':file.endsWith('.png')?'image/png':'text/html');res.end(readFileSync(file));}catch{res.writeHead(404);res.end();}
@@ -39,20 +39,30 @@ async function until(fn,message){for(let i=0;i<100;i++){if(await fn())return;awa
     if(failNext){failNext=false;return route.fulfill({status:500,json:{message:'Falha simulada ao guardar'}});}
     const data=route.request().postDataJSON(),task=fixture.station_tasks.find(x=>x.id===data.p_task_id);
     if(data.p_expected_version!==task.version)return route.fulfill({status:409,json:{message:'Outro posto alterou a encomenda.'}});
-    assert.deepEqual(Object.keys(data.p_patch),['status']);
+    assert.ok(['barcas','bancada'].includes(data.p_patch.device_station));
+    if(fixture.status!=='ativa')return route.fulfill({status:400,json:{message:'Encomenda encerrada'}});
+    fixture.history_version++;
     Object.assign(task,data.p_patch);task.version++;return route.fulfill({json:task});
    }
-   if(path.endsWith('/rpc/hand_off')){
-    assert.ok(fixture.station_tasks.every(x=>x.status==='pronta'),'server rejects premature handoff');fixture.status='entregue';return route.fulfill({json:{}});
+   if(path.endsWith('/rpc/change_order_status')){
+    const {p_order_id,p_action,p_version,p_reason,p_station}=route.request().postDataJSON();
+    assert.equal(p_order_id,fixture.id);
+    assert.ok(['barcas','bancada'].includes(p_station));
+    if(p_version!==fixture.history_version)return route.fulfill({status:409,json:{message:'A encomenda mudou.'}});
+    const transitions={handoff:['ativa','entregue'],undo:['entregue','ativa'],cancel:['ativa','cancelada'],reopen:['cancelada','ativa']};
+    const [from,to]=transitions[p_action];assert.equal(fixture.status,from);
+    if(p_action==='handoff')assert.ok(fixture.station_tasks.every(x=>x.status==='pronta'));
+    fixture.status=to;fixture.cancel_reason=p_reason;fixture.history_version++;
+    return route.fulfill({json:fixture});
    }
    return route.fulfill({json:[structuredClone(fixture)]});
   });
-  let id=900001;
+  let id=fixture.id;
   if(live){
    const response=await contexts[0].request.post(base+'/rest/v1/rpc/create_order',{headers:{apikey},data:{payload}});
    assert.ok(response.ok(),await response.text());const created=await response.json();
    const row=await contexts[0].request.get(base+'/rest/v1/orders?select=*,station_tasks(*),order_items(*)&id=eq.'+created.id,{headers:{apikey}});
-   const rows=await row.json();id=Number(rows[0].ref.split('-').at(-1));console.log('Live fixture:',rows[0].ref,customer);
+   const rows=await row.json();id=rows[0].id;console.log('Live fixture:',rows[0].ref,customer);
   }
   const pages=await Promise.all(contexts.map(c=>c.newPage()));const [barcas,bancada]=pages;
   pages.forEach(p=>p.on('pageerror',e=>errors.push(e.message)));
@@ -114,6 +124,28 @@ async function until(fn,message){for(let i=0;i<100;i++){if(await fn())return;awa
   assert.equal(await card(bancada).getByRole('button',{name:'Confirmar levantamento',exact:true}).count(),0);
   // Also check the complete-order detail, not only the board.
   await card(barcas).locator('.ref').click();assert.equal(await barcas.locator('[data-task="handoff"]').count(),0);await barcas.getByRole('button',{name:'Fechar',exact:true}).click();
+  if(!live){
+   await card(bancada).locator('.ref').click();
+   await bancada.getByRole('button',{name:'Cancelar encomenda'}).click();
+   await bancada.getByLabel('Motivo',{exact:true}).selectOption('Outro');
+   await bancada.locator('#otherReason input').fill('Pedido repetido por telefone');
+   await bancada.getByRole('button',{name:'Confirmar cancelamento'}).click();
+   await bancada.getByRole('button',{name:'Reabrir',exact:true}).waitFor();
+   await bancada.getByRole('button',{name:'Fechar',exact:true}).click();
+   assert.equal(await card(bancada).count(),0);
+   await bancada.getByRole('link',{name:'Histórico'}).click();
+   assert.deepEqual(await bancada.locator('[data-list]').allTextContents(),['Todas','Por iniciar','Em preparação','Prontas','Entregues','Canceladas']);
+   await bancada.getByRole('button',{name:'Em preparação',exact:true}).click();
+   assert.equal(await bancada.locator('.table-row[data-detail]').count(),0);
+   await bancada.getByRole('button',{name:'Canceladas',exact:true}).click();
+   await bancada.locator('.table-row[data-detail]').click();
+   assert.match(await bancada.locator('#dialog').innerText(),/Pedido repetido por telefone/);
+   await bancada.getByRole('button',{name:'Reabrir',exact:true}).click();
+   await bancada.getByRole('button',{name:'Cancelar encomenda'}).waitFor();
+   assert.deepEqual(fixture.station_tasks.map(t=>t.status),['pronta','por_iniciar']);
+   await bancada.getByRole('button',{name:'Fechar',exact:true}).click();
+   await bancada.getByRole('link',{name:'Encomendas',exact:true}).click();
+  }
   await click(bancada,'Iniciar');
   if(!live){failNext=true;await card(bancada).getByRole('button',{name:'Preparação pronta',exact:true}).click();await until(async()=>await bancada.locator('#writeStatus').innerText()==='Confirma o estado antes de tentar novamente.','failure feedback');assert.ok(await card(bancada).getByRole('button',{name:'Preparação pronta',exact:true}).isEnabled());}
   await click(bancada,'Preparação pronta');
@@ -152,6 +184,28 @@ async function until(fn,message){for(let i=0;i<100;i++){if(await fn())return;awa
   }
   await click(pages[1],'Confirmar levantamento');
   await until(async()=>await card(pages[1]).count()===0,'handed order removed');
+  if(!live){
+   const p=pages[1];
+   await p.getByRole('button',{name:'Desfazer',exact:true}).click();
+   await card(p).waitFor();
+   await click(p,'Confirmar levantamento');
+   const undo=p.getByRole('button',{name:'Desfazer',exact:true});
+   await undo.waitFor();await wait(7000);assert.ok(await undo.isVisible());
+   await undo.waitFor({state:'hidden',timeout:2000});
+   for(const device of pages){
+    await device.goto(url+'/#historico');
+    await device.getByRole('button',{name:'Entregues',exact:true}).click();
+    await device.locator('.table-row[data-detail]').click();
+    await device.getByRole('button',{name:'Desfazer levantamento',exact:true}).click();
+   }
+   const before=fixture.history_version;
+   await Promise.all(pages.map(device=>device.getByRole('button',{name:'Confirmar',exact:true}).click()));
+   await until(async()=>fixture.status==='ativa','undo restored active order');
+   await until(async()=>(await Promise.all(pages.map(device=>device.locator('#writeStatus').innerText()))).includes('Confirma o estado antes de tentar novamente.'),'stale confirmation rejected');
+   assert.equal(fixture.history_version,before+1);
+   await p.getByRole('button',{name:'Fechar',exact:true}).click();await p.getByRole('button',{name:'Prontas',exact:true}).click();
+   await p.locator('.table-row[data-detail]').waitFor();
+  }
   assert.deepEqual(errors,[]);
   console.log('PASS: independent sessions, mixed order, per-product quantities, simplified workflow, filters, handoff gate, device persistence, 56px targets'+(!live?', repeated taps, failed save, offline/reconnect':''));
  }finally{await browser.close();server.close();}
