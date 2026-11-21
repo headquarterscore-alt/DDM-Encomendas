@@ -85,7 +85,7 @@ async function until(fn,message){for(let i=0;i<100;i++){if(await fn())return;awa
   await bancada.locator('#search').blur();
   const imageDir=process.argv.includes('--header-images')?'docs/topo':'docs/postos';
   mkdirSync(resolve(root,imageDir),{recursive:true});
-  if(live||!process.argv.includes('--keep-images')){
+  if(process.argv.includes('--update-images')){
    await wait(250); // Allow the toast fade to finish before capturing evidence.
    for(const p of pages)await p.setViewportSize({width:1673,height:1100});
    await barcas.screenshot({path:resolve(root,imageDir,'barcas.png'),fullPage:true});

@@ -16,16 +16,14 @@ function lisbonDay(date=new Date()){
 }
 function shiftDay(day,delta){ const d=new Date(day+"T12:00:00Z"); d.setUTCDate(d.getUTCDate()+delta);return d.toISOString().slice(0,10);}
 const product=id=>catalog.find(p=>p.id===id);
-const group=i=> i.product==="apoio"?"bancada":product(i.product).cat===0?"barcas":"bancada";
-const label=i=>i.product==="apoio"?"Cozedura para a barca":product(i.product)?.name||"Artigo";
-const unit=i=>i.product==="apoio"?"":i.unit||product(i.product)?.unit||"";
+const group=i=>product(i.product).cat===0?"barcas":"bancada";
+const label=i=>product(i.product)?.name||"Artigo";
+const unit=i=>i.unit||product(i.product)?.unit||"";
 const fmtQty=n=>Number(n).toLocaleString("pt-PT",{maximumFractionDigits:2});
 const code=id=>refs.get(Number(id))||String(id);
 const globalState=o=>Object.values(o.tasks).every(v=>v===2)?2:Object.values(o.tasks).some(v=>v>0)?1:0;
 const typeName=o=>o.type==="restaurante"?"Restaurante":"Particular";
-const isBlocked=o=>o.items.some(i=>i.product==="apoio"&&!i.done)&&o.tasks.bancada!==2;
 function lineDescription(i){
- if(i.product==="apoio")return i.note;
  const p=product(i.product);
  if(p.cat===0)return [i.people+" pessoas",i.use,fmtQty(i.budget)+" € de marisco"].join(" · ");
  return [fmtQty(i.qty)+" "+unit(i),i.cut,i.note].filter(Boolean).join(" · ");
@@ -77,8 +75,11 @@ const statusKeys=["por_iniciar","em_preparacao","pronta"];
 const cookKeys={pending:"por_cozer",done:"cozido_no_posto",skip:"dispensado"};
 const unitKeys={"un.":"un","dz.":"dz","kg":"kg"};
 async function rest(path,payload){
- let r;try{r=await fetch(base+"/rest/v1/"+path,{signal:AbortSignal.timeout(8000),method:payload?"POST":"GET",headers:{apikey:publicKey,"Content-Type":"application/json"},body:payload?JSON.stringify(payload):undefined,cache:"no-store"});}catch{throw Error("Sem ligação à demo. Verifica a ligação à internet e tenta novamente.");}
- const j=await r.json();if(!r.ok)throw Object.assign(Error(j.message||"Não foi possível guardar."),{status:r.status});return j;
+ let r,text;try{r=await fetch(base+"/rest/v1/"+path,{signal:AbortSignal.timeout(8000),method:payload?"POST":"GET",headers:{apikey:publicKey,"Content-Type":"application/json"},body:payload?JSON.stringify(payload):undefined,cache:"no-store"});text=await r.text();}catch{throw Error("Sem ligação à demo. Verifica a ligação à internet e tenta novamente.");}
+ let j=null;if(text){try{j=JSON.parse(text);}catch{}}
+ if(!r.ok)throw Object.assign(Error(j?.message||"O servidor não respondeu como esperado (erro "+r.status+"). Tenta novamente."),{status:r.status});
+ if(text&&j===null)throw Error("Resposta inesperada do servidor. Tenta novamente.");
+ return j??{};
 }
 function convertRow(o){
  const id=Number(o.ref.split("-").at(-1));refs.set(id,o.ref);rawOrders.set(id,o);
@@ -87,7 +88,7 @@ function convertRow(o){
  let p=catalog.find(p=>p.name===i.product&&catKeys[p.cat]===i.category);
  if(!p){p={id:"custom-"+i.category+"-"+i.product,cat:catKeys.indexOf(i.category),name:i.product,unit:{"kg":"kg","un":"un.","dz":"dz."}[i.unit]||"un."};catalog.push(p);}
  return {product:p.id,line:k+1,qty:Number(i.quantity||1),unit:({kg:"kg",un:"un.",dz:"dz."})[i.unit]||i.unit,note:i.notes||"",people:i.people,size:p.size||i.barca_size||"",use:i.meal_type==="petisco"?"Petisco":"Refeição",budget:i.budget,cut:i.cut?i.cut[0].toUpperCase()+i.cut.slice(1):"",done:tasks[catKeys[p.cat]==="barcas"?"barcas":"bancada"]===2};});
- return {id,version:o.station_tasks.reduce((s,t)=>s+t.version,0),name:o.customer_name,type:o.customer_type,day:o.business_date,time:o.scheduled_time.slice(0,5),delivery:o.fulfilment==="entrega"?"Entrega":"Levantamento",address:o.address,priority:o.priority!=="normal",note:o.notes,phone:"",channel:o.source==="cliente"?"Cliente":"Equipa",handed:o.status==="entregue",items,tasks,boatSteps:boat?{gathered:boat.shellfish_collected,cooked:Object.keys(cookKeys).find(k=>cookKeys[k]===boat.cooking),assembled:boat.assembly_done}:null};
+ return {id,version:o.station_tasks.reduce((s,t)=>s+t.version,0),name:o.customer_name,type:o.customer_type,day:o.business_date,time:o.scheduled_time.slice(0,5),delivery:o.fulfilment==="entrega"?"Entrega":"Levantamento",address:o.address,priority:o.priority!=="normal",note:o.notes,channel:o.source==="cliente"?"Cliente":"Equipa",handed:o.status==="entregue",items,tasks,boatSteps:boat?{gathered:boat.shellfish_collected,cooked:Object.keys(cookKeys).find(k=>cookKeys[k]===boat.cooking),assembled:boat.assembly_done}:null};
 }
 async function readOne(uuid){const rows=await rest("orders?select=*,station_tasks(*),order_items(*)&id=eq."+encodeURIComponent(uuid));return convertRow(rows[0]);}
 async function onlineRequest(url,data){
@@ -117,9 +118,6 @@ async function onlineRequest(url,data){
  }
  return {order:await readOne(row.id)};
 }
-
-const boat=(product,people,use,budget)=>({product,people,use,budget,qty:1,note:""});
-const item=(product,qty,cut="",note="")=>({product,qty,cut,note});
 
 async function request(url,data){
  if(data&&!synced)throw Error("Sem ligação à base de dados. Volta a ligar antes de confirmar.");
@@ -261,7 +259,7 @@ function drawDetail(){
  const pos=dialog.scrollTop;
  const state=o.handed?"Entregue":globalState(o)===2?"Pronta para entrega":globalState(o)===1?"Em preparação":"Por iniciar";
  panel.innerHTML=modalHead(`${code(o.id)} · ${esc(o.channel)}`,esc(o.name))+`<div class="modal-body"><div class="detail-info"><span>${icon("calendar",16)}${dateText(o.day,{day:"numeric",month:"short"})} · ${esc(o.time)}</span><span>${icon(modeIcon(o),16)}${esc(o.delivery)}</span><span>${icon("user",16)}${typeName(o)}</span></div>
- ${o.address||o.phone?`<p class="detail-contact">${[esc(o.address),esc(o.phone)].filter(Boolean).join(" · ")}</p>`:""}${o.note?`<div class="note">${icon("note",17)}<div><strong>Notas de preparação</strong><p>${esc(o.note)}</p></div></div>`:""}
+ ${o.address?`<p class="detail-contact">${esc(o.address)}</p>`:""}${o.note?`<div class="note">${icon("note",17)}<div><strong>Notas de preparação</strong><p>${esc(o.note)}</p></div></div>`:""}
  ${Object.keys(o.tasks).sort((a,b)=>a===station?-1:b===station?1:0).map(s=>`<section class="task">${workControls(o,s)}</section>`).join("")}
  <div class="global"><div><small>Estado da encomenda completa</small><strong>${state}</strong></div>${globalState(o)===2&&!o.handed?`<button class="btn primary" data-task="handoff">${icon("bag",16)} Registar entrega</button>`:""}</div></div>`;
  dialog.scrollTop=pos;
@@ -273,7 +271,8 @@ let draftScope="",draftStep=1,hadFormError="";
 function startOrder(cat=page==="preparacao"&&station==="bancada"?1:0){
  const scope=page==="cliente"?"Cliente":"Equipa";
  if(!draft||draftScope!==scope){
- const t=new Date(Date.now()+3600000);draft={name:"",phone:"",type:"particular",delivery:"Levantamento",address:"",day:day<dayNow()?dayNow():day,time:new Intl.DateTimeFormat("en-GB",{timeZone:"Europe/Lisbon",hour:"2-digit",minute:"2-digit",hourCycle:"h23"}).format(t),note:"",priority:false,channel:scope,items:[],requestKey:mkKey()};draftScope=scope;draftStep=1;
+ const t=new Date(Date.now()+3600000),start=day<dayNow()?dayNow():day,startDay=start===dayNow()&&lisbonDay(t)>start?lisbonDay(t):start;
+ draft={name:"",phone:"",type:"particular",delivery:"Levantamento",address:"",day:startDay,time:new Intl.DateTimeFormat("en-GB",{timeZone:"Europe/Lisbon",hour:"2-digit",minute:"2-digit",hourCycle:"h23"}).format(t),note:"",priority:false,channel:scope,items:[],requestKey:mkKey()};draftScope=scope;draftStep=1;
  }
  hadFormError="";editIndex=-1;entry=defaultEntry(catalog.find(p=>p.cat===cat).id);openDialog("order");drawForm();
 }
@@ -317,8 +316,6 @@ document.addEventListener("change",e=>{
  if(t.id==="orderDay"){setDay(t.value);return;}
  if(t.id==="productPick"||t.id==="categoryPick"){entry=defaultEntry(t.id==="productPick"?t.value:catalog.find(p=>p.cat===+t.value).id);drawForm();return;}
  if(t.dataset.field==="o.delivery"){draft.delivery=t.value;drawForm();return;}
- if(t.dataset.line){mutate(findOrder(detailId),"line",{station:t.dataset.s,line:+t.dataset.line,done:t.checked});return;}
- if(t.dataset.step){mutate(findOrder(detailId),"boat",{station:"barcas",step:t.dataset.step,value:t.type==="checkbox"?t.checked:t.value});return;}
 });
 document.addEventListener("submit",e=>{
  if(e.target.id==="itemForm"){e.preventDefault();if(editIndex<0&&draft.items.length>=50){notice("Máximo de 50 artigos por encomenda.");return;}

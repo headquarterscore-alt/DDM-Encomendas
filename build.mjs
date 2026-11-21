@@ -21,16 +21,26 @@ for (const file of files) {
 }
 
 // Keep the start page self-contained for installed copies of the app.
+// Fail the build instead of publishing a broken page when a marker is missing.
+const must = (text, needle) => {
+  if (!text.includes(needle)) throw new Error('Build interrompido: não encontrei ' + needle);
+  return text;
+};
 const logo = 'data:image/png;base64,' + readFileSync(resolve(src, 'marca.png')).toString('base64');
-let page = read('index.html')
-  .replace('<link rel="stylesheet" href="./estilo.css">', () => '<style>' + read('estilo.css') + '</style>')
+const cssTag = '<link rel="stylesheet" href="./estilo.css">';
+let page = must(read('index.html'), cssTag);
+page = must(page, './marca.png')
+  .replace(cssTag, () => '<style>' + read('estilo.css') + '</style>')
   .replaceAll('./marca.png', logo);
 for (const file of ['app.js', 'install.js']) {
   const tag = '<script type="module" src="./' + file + '"></script>';
+  must(page, tag);
   page = page.replace(tag, () => '<script type="module">' + read(file).replace(/<\/script/gi, '<\\/script') + '</script>');
 }
 hash.update(page);
 const version = 'ddm-postos-' + hash.digest('hex').slice(0, 14);
+must(template, '__DDM_CACHE__');
+must(template, '"__DDM_ASSETS__"');
 const worker = template.replace('__DDM_CACHE__', version)
   .replace('"__DDM_ASSETS__"', () => JSON.stringify(files.filter(file => file !== 'index.html')));
 writeFileSync(resolve(dist, 'sw.js'), worker);

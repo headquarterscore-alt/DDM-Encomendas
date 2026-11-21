@@ -52,6 +52,8 @@ npm test
 
 O teste usa duas sessões de navegador com armazenamento independente e uma API simulada partilhada. Cobre a encomenda mista, unidades por artigo, etapas das Barcas (cozedura feita e dispensada), bloqueio da entrega, toques repetidos, erro de gravação, perda/recuperação de ligação, reabertura por dispositivo e alvos táteis de pelo menos 56 px. `DDM_BROWSER=chrome` permite usar o Chrome instalado; `msedge` usa o Edge.
 
+Os testes não alteram `docs/`. Para refazer as imagens dos postos, junta `--update-images` (por exemplo `node tests/postos.cjs --update-images`).
+
 `npm run test:live` repete o percurso essencial na base de demonstração: **cria uma encomenda fictícia identificada como TESTE POSTOS**, conclui os dois postos e regista a entrega para a retirar da fila. Não executar contra uma base de produção. As duas sessões só partilham os dados do servidor, nunca o armazenamento local.
 
 Evidência de 21/11/2026: teste real concluído com `DM-1121-113`. A barca terminou com a Bancada ainda por iniciar; a entrega só ficou disponível depois da conclusão da Bancada; as duas sessões reabriram no posto e modo guardados. A encomenda fictícia foi marcada como entregue. As imagens mostram essa mesma encomenda durante a preparação:
