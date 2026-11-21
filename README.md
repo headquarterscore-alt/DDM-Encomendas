@@ -39,6 +39,16 @@ Antes de publicar este fluxo, rever e aprovar [a alteração de update_task](mig
 
 As ações ficam bloqueadas durante a gravação ou sem ligação. A confirmação **Alteração guardada** só aparece após a resposta da base e a leitura do estado guardado. Se houver erro, a app atualiza a encomenda e pede para confirmar o estado antes de repetir.
 
+## Histórico
+
+Escolhe o dia e filtra por **Todas**, **Por iniciar**, **Em preparação**, **Prontas**, **Entregues** ou **Canceladas**. Abre a encomenda para ver as ações disponíveis.
+
+Depois de confirmar um levantamento ou entrega, **Desfazer** fica disponível durante oito segundos. No Histórico, abre uma encomenda entregue e confirma **Desfazer levantamento** ou **Desfazer entrega** para a devolver a Prontas.
+
+**Cancelar encomenda** pede um motivo. A encomenda sai dos dois postos e mantém o estado de cada preparação. No Histórico, **Reabrir** repõe a encomenda nas filas.
+
+Rever [002_historico.sql](migrations/002_historico.sql) depois de [001_fluxo_postos.sql](migrations/001_fluxo_postos.sql), antes de publicar a interface. As ações de preparação, entrega, cancelamento, reabertura e desfazer acrescentam um evento na mesma transação. O posto do dispositivo fica por preencher quando uma versão antiga da app não o envia.
+
 ## Testes dos dois postos
 
 Com Node.js 22.12+ e npm:

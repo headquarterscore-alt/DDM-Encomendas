@@ -82,3 +82,10 @@ nav [data-nav],.ticket .ref,.ticket-customer,.task-btns .btn,.global .btn,.list-
  .queue-filters {display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
  .board .filtered-out {display:none}
 }
+
+.list-tabs,.history-actions {display:flex;flex-wrap:wrap;gap:8px}
+.history-actions {margin-top:16px}
+.history-actions .btn,#historyConfirm select,#historyConfirm input,#undoNotice .btn {min-height:56px}
+#otherReason[hidden],#undoNotice[hidden] {display:none}
+#undoNotice {position:fixed;bottom:56px;left:50%;transform:translateX(-50%);z-index:1000;display:flex;align-items:center;gap:12px;padding:8px 12px;border-radius:8px;background:var(--navy);color:white;box-shadow:0 3px 12px #102c4126;width:max-content;max-width:94vw}
+#undoNotice .btn {background:white;color:var(--ink)}
