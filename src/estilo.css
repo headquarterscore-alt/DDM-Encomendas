@@ -27,3 +27,32 @@ dialog{max-width:min(630px,calc(100% - 24px));width:630px;padding:0;max-height:9
 .top .demo{margin-left:0}#networkStatus{display:flex;justify-content:center;align-items:center;gap:12px;background:#fff1de;color:#754216;padding:9px 15px;font-size:14px}
 #networkStatus button{border:1px solid currentColor;border-radius:5px;padding:4px 8px}#installHelp{padding:22px}#installHelp p{margin:9px 0 15px}
 @media(max-width:690px){#installApp{grid-row:1;grid-column:2;margin-right:88px}.top .demo{justify-self:end}.brand small{letter-spacing:1px}}
+
+/* Postos táteis: informação e ações permanecem no cartão. */
+.ticket{padding:18px;border-top:4px solid var(--state);border-radius:10px}
+.ticket-top{flex-wrap:wrap}.ticket-top .ref{margin-right:auto;min-height:44px;font-size:13px}
+.ticket-deadline{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:4px 0 14px;padding:10px 12px;background:#edf4f7;border-radius:8px}
+.ticket-deadline>strong{font-size:36px;line-height:1.1;letter-spacing:-1px;font-variant-numeric:tabular-nums}
+.ticket-deadline>span{display:flex;align-items:center;gap:6px;font-size:15px;font-weight:650}
+.ticket-customer{display:block;text-align:left;padding:0;min-height:56px;width:100%;overflow-wrap:anywhere}
+.ticket-customer small{display:block;color:var(--muted);font-size:13px;font-weight:500}
+.ticket-customer strong{display:block;font-size:22px;line-height:1.25}.bancada-ticket .ticket-customer strong{font-size:26px}
+.ticket-products{margin:14px 0}.ticket-product{padding:14px 0;border-top:1px solid var(--line)}
+.ticket-product h4{font-size:23px;line-height:1.2;letter-spacing:-.5px;margin:0;overflow-wrap:anywhere}
+.ticket-product p{margin-top:7px;color:var(--muted);font-size:16px}.boat-spec{display:flex;flex-wrap:wrap;gap:6px 16px;margin-top:9px;align-items:center}.boat-spec strong{font-size:22px}.boat-spec span{color:var(--muted)}
+.product-heading{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:8px 16px}.product-quantity{font-size:25px;white-space:nowrap;color:#0b4e69}.product-quantity span{font-size:19px}
+.ticket-product .product-cut{color:var(--ink)}.product-note,.ticket-note{white-space:pre-line;overflow-wrap:anywhere}.ticket-note{padding:12px;background:#fff2df;border-radius:6px;margin-bottom:14px}
+.boat-progress{list-style:none;padding:0;margin:8px 0 16px;display:grid;gap:8px;color:#61717b;font-size:15px}.boat-progress li{border-left:3px solid #cbd7de;padding:4px 9px}.boat-progress .complete{color:#226247;border-color:#45896a;background:#f1f8f4}
+.next-action{font-size:15px;font-weight:650;margin:14px 0 10px;color:#31556c}.cooking-actions{display:grid;gap:12px}.cooking-actions button:last-child{color:var(--navy);background:white;border:2px solid #7793a3}
+.ticket .ticket-action,.task .ticket-action,.focus .ticket-action{height:auto;min-height:60px;padding:12px 14px;font-size:17px;line-height:1.3;justify-content:center;text-align:center;touch-action:manipulation}
+.ticket-action.primary{background:var(--navy);border-color:var(--navy);color:white}
+.station-responsibility,.other-station,.awaiting{font-size:14px;line-height:1.5;margin-top:12px;color:var(--muted)}.completion{display:flex;gap:8px;align-items:center;color:#226247;font-weight:700;margin:14px 0}.awaiting{background:#fff2df;padding:12px;border-radius:6px;color:#79501f}
+.card-save{font-size:14px;font-weight:650;margin-top:10px}.card-save:empty{display:none}
+.write-status{position:fixed;bottom:12px;right:16px;z-index:10;background:var(--navy);color:white;padding:10px 16px;border-radius:8px;font-size:15px;max-width:calc(100% - 32px);box-shadow:0 3px 12px #102c4126;pointer-events:none}.write-status:empty{display:none}
+.head-actions .btn,.head-actions .btn.primary,.head-actions .square,.tools .btn,.date-pick,.task-btns .btn,.global .btn,#networkStatus button{min-height:56px;height:auto;white-space:normal}.head-actions .square{min-width:56px}.head-actions,.tools,.task-btns{gap:12px}.task-btns{margin-top:20px}.searchbox{height:56px}
+.sync{white-space:nowrap}.pagehead{position:sticky;top:0;z-index:5;background:var(--bg);padding:12px 0;border-bottom:1px solid var(--line)}
+#networkStatus{position:sticky;top:0;z-index:6}body:has(#networkStatus:not([hidden])) .pagehead{position:static}
+.focus .stations{display:grid;max-width:620px;margin:0 0 20px;gap:12px}.focus .station{height:auto;min-height:72px;align-items:center}.focus .station-copy{padding:12px 18px}.focus .station-copy strong{font-size:24px;margin:0}.focus .station-num,.focus .station-desc,.focus .station-art{display:none}.focus .station-state{top:25px}
+.focus .queue-title small{display:none}.focus main{padding-bottom:60px}.focus .lane-head h3{font-size:19px}.focus .lane-body{gap:16px}
+@media(max-width:1100px) and (min-width:691px){.board{grid-template-columns:repeat(3,minmax(285px,1fr));overflow-x:auto;padding-bottom:12px}.pagehead{flex-wrap:wrap}.head-actions{flex-wrap:wrap}.ticket-deadline{flex-wrap:wrap}}
+@media(max-width:690px){.ticket-deadline>strong{font-size:38px}.pagehead h1{font-size:30px}.head-actions{width:100%;margin:0;flex-wrap:wrap;justify-content:space-between}.focus .stations{max-width:none}.tools{flex-wrap:wrap}.searchbox{flex-basis:100%}.write-status{font-size:13px}.global{flex-wrap:wrap}.task-btns .btn{width:100%}}

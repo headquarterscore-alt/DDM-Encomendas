@@ -1,6 +1,7 @@
 {
   "name": "ddm-encomendas",
   "compatibility_date": "2026-11-21",
+  "previews": {},
   "assets": { "directory": "./dist" },
   "build": { "command": "node build.mjs", "watch_dir": ["src", "service-worker.template.js"] }
 }

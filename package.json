@@ -1,0 +1,10 @@
+{
+  "name": "ddm-encomendas",
+  "private": true,
+  "scripts": {
+    "build": "node build.mjs",
+    "test": "node tests/postos.cjs",
+    "test:live": "node tests/postos.cjs --live"
+  },
+  "devDependencies": { "playwright": "1.62.1" }
+}
