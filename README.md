@@ -17,7 +17,7 @@ O posto das Barcas recolhe e coze o seu próprio marisco. O posto da Bancada tra
 ## Ligar ao Cloudflare uma vez
 
 1. Cria um repositório privado no GitHub. Extrai o pacote e coloca o seu conteúdo na raiz do repositório. A pasta `src`, o ficheiro `wrangler.jsonc` e o ficheiro `build.mjs` ficam ao mesmo nível.
-2. No Cloudflare, abre **Workers & Pages → ddm → Settings → Builds → Connect**. Escolhe o repositório e define `main` como ramo de produção.
+2. No Cloudflare, abre **Workers & Pages → ddm-encomendas → Settings → Builds → Connect**. Escolhe o repositório e define `main` como ramo de produção.
 3. Usa a raiz do repositório, deixa vazio o campo **Build command** do painel e mantém **Deploy command** como `npx wrangler deploy`. O Wrangler executa a preparação definida em `wrangler.jsonc`. Para veres mudanças antes de as publicar, ativa os builds de pré-visualização para os outros ramos.
 4. Guarda uma alteração no repositório após a ligação e acompanha o resultado em **Deployments**. Confirma a abertura dos dois postos e o indicador **Base ligada**.
 
