@@ -25,12 +25,12 @@
   ],
   "shortcuts": [
     {
-      "name": "Posto das barcas",
-      "url": "./#preparacao/barcas"
+      "name": "Posto 1 · Peixe-Marisco",
+      "url": "./#preparacao/bancada"
     },
     {
-      "name": "Posto do peixe e marisco",
-      "url": "./#preparacao/bancada"
+      "name": "Posto 2 · Barcas",
+      "url": "./#preparacao/barcas"
     }
   ]
 }
