@@ -18,7 +18,7 @@ O posto das Barcas recolhe e coze o seu próprio marisco. O posto da Bancada tra
 
 1. Cria um repositório privado no GitHub. Extrai o pacote e coloca o seu conteúdo na raiz do repositório. A pasta `src`, o ficheiro `wrangler.jsonc` e o ficheiro `build.mjs` ficam ao mesmo nível.
 2. No Cloudflare, abre **Workers & Pages → ddm-encomendas → Settings → Builds → Connect**. Escolhe o repositório e define `main` como ramo de produção.
-3. Usa a raiz do repositório, deixa vazio o campo **Build command** do painel e mantém **Deploy command** como `npx wrangler deploy`. O Wrangler executa a preparação definida em `wrangler.jsonc`. Para veres mudanças antes de as publicar, ativa os builds de pré-visualização para os outros ramos.
+3. Usa a raiz do repositório, deixa vazio o campo **Build command** do painel e mantém **Deploy command** como `npx wrangler deploy`. O Wrangler executa a preparação definida em `wrangler.jsonc`. Para veres mudanças antes de as publicar, ativa os builds dos outros ramos com `npx wrangler preview`. O bloco `previews` no ficheiro de configuração permite gerar essas pré-visualizações sem publicar na produção.
 4. Guarda uma alteração no repositório após a ligação e acompanha o resultado em **Deployments**. Confirma a abertura dos dois postos e o indicador **Base ligada**.
 
 ## Testar uma mudança
