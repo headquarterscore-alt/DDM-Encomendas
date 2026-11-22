@@ -35,6 +35,16 @@ module.exports=async function testQuick(browser,url,base){
   await plus.click();
   assert.equal(await p.locator('#quizForm').count(),0);
   await p.getByText('1 Artigos').waitFor();
+  await click('Robalo');
+  await click('À peça');
+  await p.getByLabel('Número de peixes').fill('4');
+  await p.getByLabel('Peso aproximado por peixe (kg)').fill('1');
+  // Um artigo ainda em edição também tem de sobreviver ao reload.
+  await p.reload();await plus.click();
+  assert.equal(await p.getByLabel('Número de peixes').inputValue(),'4');
+  await click('Adicionar à encomenda');
+  await click('Marisco fresco');
+  await p.getByLabel('Produto',{exact:true}).fill('Gamba da costa');
   await p.getByLabel('Quantidade (kg)').fill('2');
   await click('Adicionar à encomenda');
   await click('Continuar');
@@ -42,6 +52,16 @@ module.exports=async function testQuick(browser,url,base){
   await p.getByLabel('Dia',{exact:true}).fill(today);
   await p.getByLabel('Hora pretendida').fill('23:59');
   await p.getByLabel('Encomenda prioritária').check();
+  const saved=await p.evaluate(()=>JSON.parse(localStorage.getItem(Object.keys(localStorage).find(k=>k.endsWith('-Rapida')))));
+  await p.reload();await plus.click();
+  assert.equal(await p.getByLabel('Nome do cliente ou restaurante').inputValue(),'TESTE RAPIDA');
+  assert.equal(await p.getByLabel('Encomenda prioritária').isChecked(),true);
+  assert.equal(saved.quick.items.length,2);
+  // O clique na etiqueta do retângulo invoca o seletor, mesmo fora do ícone.
+  await p.evaluate(()=>{window.pickers=[];HTMLInputElement.prototype.showPicker=function(){window.pickers.push(this.type)};});
+  await p.locator('#qOrderForm .field').filter({has:p.getByLabel('Dia',{exact:true})}).locator('span').click();
+  await p.locator('#qOrderForm .field').filter({has:p.getByLabel('Hora pretendida')}).locator('span').click();
+  assert.deepEqual(await p.evaluate(()=>window.pickers),['date','time']);
   // Telemóvel é opcional, mas se vier tem de ser válido.
   await p.getByLabel('Telemóvel (opcional)').fill('12');
   await click('Confirmar encomenda');
@@ -52,7 +72,12 @@ module.exports=async function testQuick(browser,url,base){
   assert.equal(submitted.length,1);
   const first=submitted[0];
   assert.equal(first.source,'equipa');assert.equal(first.priority,'alta');
-  assert.equal(first.items.length,1);assert.equal(first.items[0].quantity,2);
+  assert.equal(first.items.length,2);
+  assert.equal(first.items[0].product,'Robalo');assert.equal(first.items[0].quantity,4);
+  assert.equal(first.items[0].unit,'kg');assert.match(first.items[0].notes,/4 peças.*1 kg por peça/);
+  assert.equal(first.items[1].product,'Gamba da costa');assert.equal(first.items[1].quantity,2);
+  assert.equal(first.items[1].unit,'kg');assert.equal(first.client_token,saved.quick.requestKey);
+  assert.equal(await p.evaluate(()=>Object.keys(localStorage).some(k=>k.endsWith('-Rapida'))),false);
   // Formato antigo da RPC: nenhum campo do questionário.
   for(const key of ['party_size','occasion','occasion_other','shellfish_preferred','shellfish_avoid','customer_phone'])
    assert.equal(Object.hasOwn(first,key),false,key+' não devia ser enviado');
@@ -61,7 +86,7 @@ module.exports=async function testQuick(browser,url,base){
 
   // Segunda encomenda, de entrega, com telemóvel estrangeiro e uma barca.
   await plus.click();
-  await p.getByLabel('Categoria').selectOption({label:'Barcas'});
+  await click('Barcas');
   await click('Adicionar à encomenda');
   await click('Continuar');
   await p.getByLabel('Nome do cliente ou restaurante').fill('TESTE ENTREGA');

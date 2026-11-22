@@ -41,11 +41,11 @@ As ações ficam bloqueadas durante a gravação ou sem ligação. A confirmaç�
 
 ## Duas formas de encomendar
 
-**Equipa: botão «+» verde** (nos postos). Abre o formulário rápido de dois ecrãs: artigos e depois cliente e hora. Levantamento ou entrega com morada, prioridade, e telemóvel opcional (se for preenchido tem de ser válido). Não envia ocasião, pessoas nem marisco, por isso a base recebe o formato antigo de `create_order`.
+**Equipa: botão «+» verde** (nos postos). Abre o formulário rápido de dois ecrãs: artigos e depois cliente e hora. Categorias e produtos têm botões táteis e permitem escrever um produto fora da lista. Para peixe à peça, indica-se o número de peixes e o peso aproximado por peixe. A base recebe o peso total em kg, com as peças e o peso por peça nas instruções do artigo. Levantamento ou entrega com morada, prioridade, e telemóvel opcional (se for preenchido tem de ser válido). Não envia ocasião, pessoas nem marisco, por isso a base recebe o formato antigo de `create_order`.
 
 **Separador Cliente: questionário de seis passos**, para o cliente responder sozinho ou com a equipa ao lado. Inclui ocasião, marisco que prefere e que não pode comer, e telemóvel obrigatório. Levantamento ou entrega com morada, dia e hora. **Não quero barca** permite avançar só com artigos do catálogo.
 
-O rascunho do questionário fica guardado no navegador, incluindo ao fechar e reabrir. O do formulário rápido fica só em memória. Em ambos, a confirmação limpa o rascunho. O número apresentado no fim identifica a encomenda. Os postos mostram o marisco a evitar e o contacto, com destaque quando passa a hora prevista.
+O rascunho do questionário fica guardado no navegador, incluindo ao fechar e reabrir. O do formulário rápido também fica guardado por conta e dispositivo, incluindo o artigo em edição. Em ambos, a confirmação limpa o rascunho. O número apresentado no fim identifica a encomenda. Os postos mostram o marisco a evitar e o contacto, com destaque quando passa a hora prevista.
 
 Rever [003_questionario.sql](migrations/003_questionario.sql) antes da publicação e aplicar após aprovação. A ocasião da encomenda pode ser Refeição, Evento, Petisco ou Outro. O tipo de serviço do artigo continua limitado a Refeição ou Petisco. O mesmo `client_token` permite repetir uma submissão se a ligação falhar.
 
