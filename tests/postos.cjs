@@ -10,7 +10,7 @@ const source=readFileSync(resolve(root,'src/app.js'),'utf8');
 const base=source.match(/const base="([^"]+)"/)[1];
 const apikey=source.match(/publicKey="([^"]+)"/)[1];
 const day=new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Lisbon'}).format(new Date());
-const customer='TESTE POSTOS · Restaurante Mar Azul '+Date.now();
+const customer=live?'TESTE POSTOS · Restaurante Mar Azul '+Date.now():'Restaurante Mar Azul';
 const payload={customer_name:customer,customer_type:'restaurante',fulfilment:'recolha',address:'',scheduled_time:'19:30',business_date:day,source:'equipa',priority:'normal',notes:'Encomenda fictícia para validar a PR. Não preparar.',client_token:crypto.randomUUID(),items:[
  {category:'barcas',product:'Barca média',quantity:1,unit:'un',barca_size:'media',meal_type:'refeicao',people:6,budget:100},
  {category:'peixe_fresco',product:'Robalo',quantity:2.5,unit:'kg',cut:'em filetes'},
@@ -101,6 +101,13 @@ async function until(fn,message){for(let i=0;i<100;i++){if(await fn())return;awa
    await until(()=>Promise.resolve(mutations===1),'one request');
    await until(async()=>await barcas.locator('#writeStatus').innerText()==='Alteração guardada.','save complete');
    await wait(500);assert.equal(mutations,1,'double tap sent one write');
+   const undoBarca=barcas.locator('#undoNotice');
+   assert.match(await undoBarca.innerText(),/Marcada como pronta/);
+   if(process.argv.includes('--update-images'))await undoBarca.screenshot({path:resolve(root,'docs/postos/desfazer.png')});
+   await undoBarca.getByRole('button',{name:'Desfazer'}).evaluate(b=>{b.click();b.click();});
+   await until(async()=>await card(barcas).getByRole('button',{name:'Pronta',exact:true}).isEnabled(),'undo ready returned the card');
+   assert.equal(mutations,2);assert.deepEqual(fixture.station_tasks.map(t=>t.status),['por_iniciar','por_iniciar']);
+   assert.ok(await undoBarca.isHidden());await click(barcas,'Pronta');
   }else await click(barcas,'Pronta');
   assert.ok(barcas.url().endsWith('#encomendas/barcas'),'legacy shortcut redirected');
   await barcas.setViewportSize({width:390,height:900});
@@ -149,6 +156,7 @@ async function until(fn,message){for(let i=0;i<100;i++){if(await fn())return;awa
    await bancada.getByRole('button',{name:'Fechar',exact:true}).click();
    assert.equal(await card(bancada).count(),0);
    await bancada.getByRole('link',{name:'Histórico'}).click();
+   await bancada.locator('.list-tabs').waitFor();
    assert.deepEqual(await bancada.locator('[data-list]').allTextContents(),['Todas','Por preparar','Prontas','Entregues','Canceladas']);
    await bancada.getByRole('button',{name:'Por preparar',exact:true}).click();
    assert.equal(await bancada.locator('.table-row[data-detail]').count(),0);
@@ -164,6 +172,12 @@ async function until(fn,message){for(let i=0;i<100;i++){if(await fn())return;awa
   if(!live){failNext=true;await card(bancada).getByRole('button',{name:'Pronta',exact:true}).click();await until(async()=>await bancada.locator('#writeStatus').innerText()==='Confirma o estado antes de tentar novamente.','failure feedback');assert.ok(await card(bancada).getByRole('button',{name:'Pronta',exact:true}).isEnabled());}
   await click(bancada,'Pronta');
   if(!live)assert.equal(fixture.station_tasks.find(t=>t.station==='bancada').status,'pronta');
+  if(!live){
+   await bancada.locator('[data-quick-undo]').click();
+   await until(async()=>await card(bancada).getByRole('button',{name:'Pronta',exact:true}).isEnabled(),'legacy status restored');
+   assert.deepEqual(fixture.station_tasks.map(t=>t.status),['pronta','em_preparacao']);
+   await click(bancada,'Pronta');
+  }
   await barcas.reload();await card(barcas).waitFor();
   for(const p of pages)assert.ok(await card(p).getByRole('button',{name:'Confirmar levantamento',exact:true}).isVisible(),'handoff only after both ready');
   // Reopen root URL in fresh pages; the two contexts retain separate device preferences.

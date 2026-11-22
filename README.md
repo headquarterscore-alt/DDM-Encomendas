@@ -33,7 +33,7 @@ Seleciona **Peixe-Marisco** ou **Barcas** e ativa o botão **Modo posto** no cab
 
 **Encomendas** (`#encomendas`) abre o posto guardado. Os atalhos `#encomendas/bancada` e `#encomendas/barcas` escolhem o posto. Os antigos atalhos `#preparacao` continuam a abrir a fila. **Histórico** (`#historico`) mostra a lista do dia e **Cliente** (`#cliente`) abre o catálogo.
 
-Toca em **Pronta** uma única vez quando o trabalho desse posto estiver terminado. As filas mostram **Por preparar** e **Prontas**, com o cliente em destaque. As tarefas antigas em preparação aparecem em **Por preparar** e também terminam num toque. O marisco da barca pertence ao posto Barcas. O levantamento ou a entrega só pode ser confirmado quando todos os postos da encomenda estiverem prontos. Os filtros mostram as encomendas do estado escolhido. No telemóvel, cada filtro de estado abre apenas a respetiva coluna; **Todas** mostra as três em sequência.
+Toca em **Pronta** quando o trabalho desse posto estiver terminado. O cartão passa de **Por preparar** a **Prontas**. Durante oito segundos, **Desfazer** repõe a preparação anterior desse posto. As tarefas antigas em preparação também terminam num toque. O marisco da barca pertence ao posto Barcas. O levantamento ou a entrega fica disponível quando todos os postos terminam.
 
 Antes de publicar este fluxo, rever e aprovar [a alteração de update_task](migrations/001_fluxo_postos.sql). A função em produção exige os três passos antigos para concluir a barca. A migração preserva as colunas e os pedidos das versões anteriores da app.
 
@@ -41,9 +41,9 @@ As ações ficam bloqueadas durante a gravação ou sem ligação. A confirmaç�
 
 ## Duas formas de encomendar
 
-**Equipa: botão «+» verde** (nos postos). Abre o formulário rápido de dois ecrãs: artigos e depois cliente e hora. Categorias e produtos têm botões táteis e permitem escrever um produto fora da lista. Para peixe à peça, indica-se o número de peixes e o peso aproximado por peixe. A base recebe o peso total em kg, com as peças e o peso por peça nas instruções do artigo. Levantamento ou entrega com morada, prioridade, e telemóvel opcional (se for preenchido tem de ser válido). Não envia ocasião, pessoas nem marisco, por isso a base recebe o formato antigo de `create_order`.
+Em **Peixe-Marisco**, **Nova encomenda** abre os artigos. Robalo e Dourada abrem à peça, com número de peixes e peso aproximado por peixe. Gamba da costa abre ao quilo. **Todos os artigos** dá acesso às outras categorias. A equipa também pode escrever o nome de um produto. O segundo ecrã recolhe o cliente, o horário e os dados do levantamento ou entrega.
 
-**Separador Cliente: questionário de seis passos**, para o cliente responder sozinho ou com a equipa ao lado. Inclui ocasião, marisco que prefere e que não pode comer, e telemóvel obrigatório. Levantamento ou entrega com morada, dia e hora. **Não quero barca** permite avançar só com artigos do catálogo.
+Em **Barcas**, **Encomendar barca** abre o questionário da equipa para atender ao balcão ou ao telefone. O separador **Cliente** abre o mesmo questionário para o cliente responder no tablet. Um toque num dos números de pessoas propostos avança para a ocasião. Para outro grupo, escreve o número exato e toca em **Continuar**. A sugestão de barca já vem selecionada. **Ajustar barca** permite personalizá-la e **Não quero barca** permite encomendar só peixe ou marisco. O formulário da equipa inclui **Encomenda prioritária**.
 
 O rascunho do questionário fica guardado no navegador, incluindo ao fechar e reabrir. O do formulário rápido também fica guardado por conta e dispositivo, incluindo o artigo em edição. Em ambos, a confirmação limpa o rascunho. O número apresentado no fim identifica a encomenda. Os postos mostram o marisco a evitar e o contacto, com destaque quando passa a hora prevista.
 

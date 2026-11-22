@@ -89,6 +89,7 @@ nav [data-nav],.ticket .ref,.ticket-customer,.task-btns .btn,.global .btn,.list-
 #otherReason[hidden],#undoNotice[hidden] {display:none}
 #undoNotice {position:fixed;bottom:56px;left:50%;transform:translateX(-50%);z-index:1000;display:flex;align-items:center;gap:12px;padding:8px 12px;border-radius:8px;background:var(--navy);color:white;box-shadow:0 3px 12px #102c4126;width:max-content;max-width:94vw}
 #undoNotice .btn {background:white;color:var(--ink)}
+#undoNotice span{min-width:0;overflow-wrap:anywhere}#undoNotice .btn{flex:none}
 
 .quiz {font-size:18px}
 .quiz progress {display:block;width:100%;height:8px;accent-color:var(--navy);margin-bottom:24px}
@@ -116,12 +117,19 @@ nav [data-nav],.ticket .ref,.ticket-customer,.task-btns .btn,.global .btn,.list-
 #loginPanel input,#loginPanel button,#signOut {min-height:56px}
 #loginPanel button {width:100%;justify-content:center}
 .session-locked #main,.session-locked nav,.session-locked #networkStatus,.session-locked #dialog,.session-locked #undoNotice,.session-locked #writeStatus,.session-locked #toast,#signOut[hidden],#loginPanel[hidden] {display:none}
-/* Nova encomenda da equipa: só um «+» verde, grande, fácil de acertar com luvas. */
-.station-header .btn.primary.new-plus{width:72px;height:72px;min-height:72px;padding:0;border-radius:18px;background:#16a34a;border-color:#16a34a;color:#fff;box-shadow:0 4px 14px #16a34a40}
-.station-header .btn.primary.new-plus:hover{background:#15803d;border-color:#15803d}
-.station-header .btn.primary.new-plus:focus-visible{outline:3px solid #0b4f2a;outline-offset:3px}
-.station-header .btn.primary.new-plus .ico{width:40px;height:40px;stroke-width:3}
-@media(max-width:690px){.station-header .btn.primary.new-plus{width:64px;height:64px;min-height:64px}}
+.station-header .btn.primary.new-order{min-height:64px;padding:12px 18px;background:var(--navy);border-color:var(--navy);font-size:18px;gap:10px}
+.party-options{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-bottom:20px}
+.party-options button{display:grid;place-content:center;gap:2px;min-height:76px;border:1px solid var(--line);border-radius:8px;background:#f4f7f8;color:var(--ink)}
+.party-options button strong{font-size:28px;line-height:1.1}.party-options button span{font-size:15px}
+.party-options [aria-pressed="true"]{background:var(--navy);color:white}
+.quiz-section{border-bottom:1px solid var(--line);margin-bottom:8px}
+.quiz-section summary{min-height:56px;padding:16px 4px;cursor:pointer;color:var(--navy);font-weight:650}
+.boat-summary{display:grid;gap:6px;background:#edf4f7;border-radius:8px;padding:16px;margin-bottom:12px}
+.boat-summary strong{font-size:24px}
+#qItemForm .field input,#qItemForm .field select,#qItemForm .btn,#qOrderForm .btn{min-height:56px}
+.item-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}
+.item-actions .btn{flex:1 1 10rem;justify-content:center}
+@media(max-width:690px){.station-header .btn.primary.new-order{min-height:56px;font-size:16px;padding:10px 12px}}
 
 /* Filas de preparação: quatro cartões por linha nos ecrãs maiores. */
 .board{grid-template-columns:minmax(0,1fr);overflow-x:visible}
