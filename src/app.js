@@ -58,7 +58,7 @@ const cls=["wait","work","ready"];
 const categoryIcons=["boat","fish","waves","pot","snow"];
 const dayNow=()=>lisbonDay();
 let page="encomendas",station="bancada",day=dayNow(),orders=[],loaded=false,synced=false,loading=false,serial=0;
-let syncError=false;let filter="all",listState="all",focusMode=false,detailId=null,busy=false,dialogMode="",draft=null,entry=null,editIndex=-1;
+let syncError=false;let filter="all",listState="all",focusMode=false,detailId=null,busy=false,dialogMode="",draft=null;
 let savingId=null,saveMessage="";
 try{station=localStorage.getItem("ddm-posto")==="barcas"?"barcas":"bancada";focusMode=localStorage.getItem("ddm-modo-posto")==="true";}catch{}
 const dialog=$("#dialog"),panel=$("#dialogContent"),main=$("#main");
@@ -76,6 +76,7 @@ const unitKeys={"un.":"un","dz.":"dz","kg":"kg"};
 async function rest(path,payload){
  let r,text;try{r=await fetch(base+"/rest/v1/"+path,{signal:AbortSignal.timeout(8000),method:payload?"POST":"GET",headers:{apikey:publicKey,"Content-Type":"application/json"},body:payload?JSON.stringify(payload):undefined,cache:"no-store"});text=await r.text();}catch{throw Error("Sem ligação à demo. Verifica a ligação à internet e tenta novamente.");}
  let j=null;if(text){try{j=JSON.parse(text);}catch{}}
+ if(!r.ok&&path==="rpc/create_order"&&j?.code&&j.code!=="P0001")throw Error("Não foi possível registar a encomenda. Confirme os dados e tente novamente.");
  if(!r.ok)throw Object.assign(Error(j?.message||"O servidor não respondeu como esperado (erro "+r.status+"). Tenta novamente."),{status:r.status});
  if(text&&j===null)throw Error("Resposta inesperada do servidor. Tenta novamente.");
  return j??{};
@@ -87,7 +88,7 @@ function convertRow(o){
  let p=catalog.find(p=>p.name===i.product&&catKeys[p.cat]===i.category);
  if(!p){p={id:"custom-"+i.category+"-"+i.product,cat:catKeys.indexOf(i.category),name:i.product,unit:{"kg":"kg","un":"un.","dz":"dz."}[i.unit]||"un."};catalog.push(p);}
  return {product:p.id,line:k+1,qty:Number(i.quantity||1),unit:({kg:"kg",un:"un.",dz:"dz."})[i.unit]||i.unit,note:i.notes||"",people:i.people,size:p.size||i.barca_size||"",use:i.meal_type==="petisco"?"Petisco":"Refeição",budget:i.budget,cut:i.cut?i.cut[0].toUpperCase()+i.cut.slice(1):"",done:tasks[catKeys[p.cat]==="barcas"?"barcas":"bancada"]===2};});
- return {id,revision:o.history_version??0,cancelled:o.status==="cancelada",reason:o.cancel_reason,version:o.station_tasks.reduce((s,t)=>s+t.version,0),name:o.customer_name,type:o.customer_type,day:o.business_date,time:o.scheduled_time.slice(0,5),delivery:o.fulfilment==="entrega"?"Entrega":"Levantamento",address:o.address,priority:o.priority!=="normal",note:o.notes,channel:o.source==="cliente"?"Cliente":"Equipa",handed:o.status==="entregue",items,tasks};
+ return {id,revision:o.history_version??0,cancelled:o.status==="cancelada",phone:normalizedPhone(o.customer_phone||o.notes?.match(/(?:^|\n)Contacto: ([^\n]+)/)?.[1]),avoid:o.shellfish_avoid||[],liked:o.shellfish_preferred||[],occasion:o.occasion,occasionOther:o.occasion_other,party:o.party_size,reason:o.cancel_reason,version:o.station_tasks.reduce((s,t)=>s+t.version,0),name:o.customer_name,type:o.customer_type,day:o.business_date,time:o.scheduled_time.slice(0,5),delivery:o.fulfilment==="entrega"?"Entrega":"Levantamento",address:o.address,priority:o.priority!=="normal",note:o.notes,channel:o.source==="cliente"?"Cliente":"Equipa",handed:o.status==="entregue",items,tasks};
 }
 async function readOne(uuid){const rows=await rest("orders?select=*,station_tasks(*),order_items(*)&id=eq."+encodeURIComponent(uuid));return convertRow(rows[0]);}
 async function onlineRequest(url,data){
@@ -96,7 +97,13 @@ async function onlineRequest(url,data){
   return {orders:(await rest("orders?select=*,station_tasks(*),order_items(*)&business_date=eq."+encodeURIComponent(day))).map(convertRow)};
  }
  if(url==="/api/orders"){
-  const r=await rest("rpc/create_order",{payload:{customer_name:data.name.trim(),customer_type:data.type,fulfilment:data.delivery==="Entrega"?"entrega":"recolha",address:data.address,scheduled_time:data.time,business_date:data.day,source:data.channel==="Cliente"?"cliente":"equipa",priority:data.priority?"alta":"normal",notes:[data.note,data.phone?"Contacto: "+data.phone:""].filter(Boolean).join("\n"),client_token:data.requestKey,items:data.items.map(i=>{const p=product(i.product);return {category:catKeys[p.cat],product:p.name,quantity:i.qty,unit:unitKeys[p.unit],cut:p.cat===1?i.cut.toLowerCase():null,barca_size:p.cat===0?({bp:"pequena",bm:"media",bg:"grande"}[i.product]):null,meal_type:p.cat===0?(i.use==="Petisco"?"petisco":"refeicao"):null,people:p.cat===0?i.people:null,budget:p.cat===0?i.budget:null,notes:i.note};})}});
+  // A RPC antiga aceita chaves desconhecidas. Confirmar a coluna antes de enviar
+  // para não perder o contacto ou o marisco a evitar numa pré-visualização antiga.
+  if(!Array.from(rawOrders.values()).some(o=>Object.hasOwn(o,"shellfish_avoid"))){
+   try{await rest("orders?select=shellfish_avoid&limit=0");}
+   catch(e){if(e.status===400)throw Error("O questionário aguarda a atualização da base de dados.");throw e;}
+  }
+  const r=await rest("rpc/create_order",{payload:{customer_name:data.name.trim(),customer_type:data.type,fulfilment:data.delivery==="Entrega"?"entrega":"recolha",address:data.delivery==="Entrega"?data.address:"",scheduled_time:data.time,business_date:data.day,source:data.channel==="Cliente"?"cliente":"equipa",priority:data.priority?"alta":"normal",notes:data.note,customer_phone:normalizedPhone(data.phone),party_size:Number(data.party),occasion:data.occasion,occasion_other:data.occasion==="outro"?data.occasionOther.trim():null,shellfish_preferred:preferences(data,"liked"),shellfish_avoid:preferences(data,"avoid"),client_token:data.requestKey,items:data.items.map(i=>{const p=product(i.product);return {category:catKeys[p.cat],product:p.name,quantity:i.qty,unit:unitKeys[p.unit],cut:p.cat===1?i.cut.toLowerCase():null,barca_size:p.cat===0?({bp:"pequena",bm:"media",bg:"grande"}[i.product]):null,meal_type:p.cat===0?(i.use==="Petisco"?"petisco":"refeicao"):null,people:p.cat===0?i.people:null,budget:p.cat===0?i.budget:null,notes:i.note};})}});
   return {order:await readOne(r.id)};
  }
  const row=rawOrders.get(url.split("/").at(-1));if(!row)throw Error("Encomenda indisponível.");
@@ -133,7 +140,7 @@ function route(){
   if(raw==="preparacao")history.replaceState(null,"","#encomendas/"+station);
  }else{focusMode=false;}
  filter="all";
- document.body.classList.toggle("focus",focusMode);if(dialog.open)dialog.close();render();sync();
+ document.body.classList.toggle("focus",focusMode);if(dialog.open)dialog.close();render();sync();if(page==="cliente")startOrder();
 }
 function selectStation(s){
  if(!Object.hasOwn(stations,s))return;station=s;try{localStorage.setItem("ddm-posto",s)}catch{}
@@ -154,6 +161,7 @@ async function sync(){
  finally{if(fetchDay===selected)fetchDay=null;renderSync();}
 }
 function renderSync(){
+ refreshDeadlines();
  document.querySelectorAll(".sync").forEach(el=>{el.classList.toggle("off",!synced);el.innerHTML=`<span></span>${synced?"Ligado":networkProblem?"Sem ligação":"A ligar"}`;el.title=lastSync?"Última leitura às "+new Date(lastSync).toLocaleTimeString("pt-PT",{timeZone:"Europe/Lisbon"}):"Ligação à base de dados da equipa";});
  const b=document.getElementById("networkStatus");
  b.hidden=!networkProblem;b.querySelector("span").textContent=lastSync?"Sem ligação. A última leitura foi às "+new Date(lastSync).toLocaleTimeString("pt-PT")+". Volta a ligar para guardar alterações.":"Não foi possível carregar as encomendas da equipa. Verifica a ligação e tenta novamente.";
@@ -188,6 +196,21 @@ function toolbar(total){
 }
 const advanceLabel=(s,n)=>n===0?"Iniciar":s==="barcas"?"Barca pronta":"Preparação pronta";
 const handoffLabel=o=>o.delivery==="Entrega"?"Confirmar entrega":"Confirmar levantamento";
+function contactActions(o){
+ const dial=o.phone?`<a class="btn" href="tel:${esc(o.phone)}">Ligar</a>`:"";
+ return `${o.avoid.length?`<p class="avoid-note"><strong>Marisco a evitar</strong> · ${esc(o.avoid.join(", "))}</p>`:""}
+ <div class="contact-actions" data-contact-order="${o.id}"><strong hidden>Atrasada</strong>${dial}</div>`;
+}
+function refreshDeadlines(){
+ const now=new Date();
+ const today=lisbonDay(now),hour=new Intl.DateTimeFormat("en-GB",{timeZone:"Europe/Lisbon",hour:"2-digit",minute:"2-digit",hourCycle:"h23"}).format(now);
+ document.querySelectorAll("[data-contact-order]").forEach(el=>{
+  const o=findOrder(el.dataset.contactOrder);
+  const late=o&&!o.handed&&!o.cancelled&&(o.day<today||(o.day===today&&o.time<hour));
+  el.classList.toggle("late",Boolean(late));el.querySelector("strong").hidden=!late;
+  const a=el.querySelector("a");if(a)a.textContent=late?"Ligar ao cliente":"Ligar";
+ });
+}
 function orderCard(o,n){
  const lines=o.items.filter(i=>group(i)===station);
  const other=station==="barcas"?"bancada":"barcas";
@@ -195,6 +218,7 @@ function orderCard(o,n){
  <div class="ticket-deadline"><strong>${esc(o.time)}</strong><span>${icon(modeIcon(o),18)}${esc(o.delivery)}</span></div>
  <button class="ticket-customer" data-detail="${o.id}"><small>${typeName(o)}</small><strong>${esc(o.name)}</strong></button>
  <div class="ticket-products">${lines.map(i=>station==="barcas"?`<div class="ticket-product"><h4>${esc(label(i))}${i.qty>1?` × ${fmtQty(i.qty)}`:""}</h4><div class="boat-spec"><strong>${esc(i.people)} pessoas</strong><span>${esc(i.size||product(i.product)?.size||"")}</span></div><p>${esc(i.use)} · ${fmtQty(i.budget)} € de marisco</p>${i.note?`<p class="product-note">${esc(i.note)}</p>`:""}</div>`:`<div class="ticket-product"><div class="product-heading"><h4>${esc(label(i))}</h4><strong class="product-quantity">${fmtQty(i.qty)} <span>${esc(unit(i))}</span></strong></div><p class="product-cut">Corte: <strong>${esc(i.cut||"Não indicado")}</strong></p>${i.note?`<p class="product-note">${esc(i.note)}</p>`:""}</div>`).join("")}</div>
+ ${contactActions(o)}
  ${o.note?`<p class="ticket-note">${esc(o.note)}</p>`:""}
  ${n<2?`<button class="ticket-action primary" data-advance="${o.id}">${advanceLabel(station,n)}</button>`:""}
  ${n===2?`<p class="completion">${icon("check",18)} ${station==="barcas"?"Barcas concluídas":"Preparação concluída"}</p>${globalState(o)===2?`<button class="ticket-action primary" data-handoff="${o.id}">${handoffLabel(o)}</button>`:`<p class="awaiting">A aguardar ${other==="barcas"?"as Barcas":"Peixe-Marisco"}</p>`}`:""}
@@ -222,7 +246,7 @@ function listContent(){
  const items=orders.filter(o=>listState==="all"||listState===stateKey(o)).sort(byTime);
  return `<div class="list-tabs">${[["all","Todas"],...statusKeys.map((key,n)=>[key,states[n]]),["entregue","Entregues"],["cancelada","Canceladas"]].map(([key,t])=>`<button data-list="${key}" aria-pressed="${key===listState}" class="${key===listState?"active":""}">${t}</button>`).join("")}</div><div class="order-table"><div class="table-row table-head"><span>Encomenda</span><span>Cliente</span><span>Hora prevista</span><span>Postos</span><span>Estado</span></div>${items.map(o=>`<button data-detail="${o.id}" class="table-row"><strong>${code(o.id)}</strong><span>${esc(o.name)}<small>${typeName(o)}</small></span><span>${esc(o.time)}<small>${esc(o.delivery)}</small></span><span>${Object.keys(o.tasks).map(k=>stations[k]).join(" + ")}</span><span>${o.cancelled?"Cancelada":o.handed?`<span class="delivered">${icon("check",14)} Entregue</span>`:statusPill(globalState(o))}</span></button>`).join("")||empty("Sem encomendas para estes critérios.")}</div>`;
 }
-function clientContent(){return `<div class="client-intro"><div><span class="station-num">ENCOMENDAS</span><h2>O que vai levar?</h2><p>Escolha os artigos, a preparação e a hora pretendida.</p>${button("bag","Começar encomenda","new","primary")}</div><div class="client-art"></div></div><h2 class="catalog-title">Escolher por categoria</h2><div class="cat-grid">${categories.map((c,n)=>`<button type="button" data-startcat="${n}"><span class="cat-symbol">${icon(categoryIcons[n],28)}</span><strong>${c}</strong><span>${catalog.filter(p=>p.cat===n).length} opções ${icon("right",14)}</span></button>`).join("")}</div><p class="helptext">${icon("info",16)} Demonstração. Os pedidos entram apenas nos postos de teste.</p>`;}
+function clientContent(){return `<section class="client-intro"><div><h2>Faça a sua encomenda</h2><p>Escolha uma barca, peixe ou marisco para levantar na loja ou receber por entrega.</p>${button("bag","Começar encomenda","new","primary")}</div></section>`;}
 function render(){
  document.title=(page==="encomendas"?"Encomendas":page==="cliente"?"Cliente":"Histórico")+" · Delicias do Mar";
  document.querySelectorAll("[data-nav]").forEach(a=>{a.classList.toggle("active",a.dataset.nav===page);if(a.dataset.nav===page)a.setAttribute("aria-current","page");else a.removeAttribute("aria-current");});
@@ -297,6 +321,9 @@ function drawDetail(){
  const state=o.cancelled?"Cancelada":o.handed?"Entregue":globalState(o)===2?"Pronta para entrega":globalState(o)===1?"Em preparação":"Por iniciar";
  panel.innerHTML=modalHead(`${code(o.id)} · ${esc(o.channel)}`,esc(o.name))+`<div class="modal-body"><div class="detail-info"><span>${icon("calendar",16)}${dateText(o.day,{day:"numeric",month:"short"})} · ${esc(o.time)}</span><span>${icon(modeIcon(o),16)}${esc(o.delivery)}</span><span>${icon("user",16)}${typeName(o)}</span></div>
  ${o.address?`<p class="detail-contact">${esc(o.address)}</p>`:""}${o.note?`<div class="note">${icon("note",17)}<div><strong>Notas de preparação</strong><p>${esc(o.note)}</p></div></div>`:""}
+ ${contactActions(o)}
+ ${o.party?`<p>${esc(o.party)} pessoas · ${esc(occasions[o.occasion]||"")} ${esc(o.occasionOther||"")}</p>`:""}
+ ${o.liked.length?`<p>Marisco preferido: ${esc(o.liked.join(", "))}</p>`:""}
  ${Object.keys(o.tasks).sort((a,b)=>a===station?-1:b===station?1:0).map(s=>`<section class="task">${workControls(o,s)}</section>`).join("")}
  <div class="global"><div><small>Estado da encomenda completa</small><strong>${state}</strong></div>${globalState(o)===2&&!o.handed&&!o.cancelled?`<button class="btn primary" data-task="handoff">${icon("bag",16)} ${handoffLabel(o)}</button>`:""}</div>
  ${o.cancelled?`<p>Motivo: ${esc(o.reason)}</p>`:""}
@@ -306,56 +333,194 @@ function drawDetail(){
 }
 
 const mkKey=()=>globalThis.crypto?.randomUUID?.()||"demo-"+Date.now().toString(36)+"-"+Math.random().toString(36).slice(2);
+
+const occasions={refeicao:"Refeição",evento:"Evento",petisco:"Petisco",outro:"Outro"};
+const capacities={bp:3,bm:6,bg:10};
+const steps=["Pessoas","Ocasião","Marisco","Artigos","Contacto e horário","Resumo"];
+const stepTitles=["Quantas pessoas são?","Qual é a ocasião?","Que marisco prefere?","O que vai levar?","Quando e como quer receber a encomenda?","Está tudo certo?"];
+const drafts=new Map();
 let draftScope="",draftStep=1,hadFormError="";
-function startOrder(cat=page==="encomendas"&&station==="bancada"?1:0){
- const scope=page==="cliente"?"Cliente":"Equipa";
- if(!draft||draftScope!==scope){
- const t=new Date(Date.now()+3600000),start=day<dayNow()?dayNow():day,startDay=start===dayNow()&&lisbonDay(t)>start?lisbonDay(t):start;
- draft={name:"",phone:"",type:"particular",delivery:"Levantamento",address:"",day:startDay,time:new Intl.DateTimeFormat("en-GB",{timeZone:"Europe/Lisbon",hour:"2-digit",minute:"2-digit",hourCycle:"h23"}).format(t),note:"",priority:false,channel:scope,items:[],requestKey:mkKey()};draftScope=scope;draftStep=1;
- }
- hadFormError="";editIndex=-1;entry=defaultEntry(catalog.find(p=>p.cat===cat).id);openDialog("order");drawForm();
+const keyFor=scope=>"ddm-questionario-1-"+scope;
+function persistDraft(){
+ if(!draft)return;
+ const snapshot={draft,step:draftStep};
+ drafts.set(draftScope,snapshot);
+ try{localStorage.setItem(keyFor(draftScope),JSON.stringify(snapshot));}catch{}
 }
-function defaultEntry(id){const p=product(id);return {product:id,qty:1,cut:p.cat===1?cuts[0]:"",people:p.cat===0?[3,6,10][catalog.filter(x=>x.cat===0).indexOf(p)]:1,use:"Refeição",budget:p.budget||0,note:""};}
-const opts=(items,v)=>items.map(([id,t])=>`<option value="${esc(id)}" ${String(v)===String(id)?"selected":""}>${esc(t)}</option>`).join("");
-const input=(label,key,value,attrs="")=>`<label class="field"><span>${label}</span><input data-field="${key}" value="${esc(value)}" ${attrs}></label>`;
-function entryEditor(){
- const p=product(entry.product);
- return `<div class="editor"><div class="form-grid"><label class="field"><span>Categoria</span><select id="categoryPick">${opts(categories.map((t,n)=>[n,t]),p.cat)}</select></label><label class="field"><span>Produto</span><select id="productPick">${opts(catalog.filter(x=>x.cat===p.cat).map(x=>[x.id,x.name]),p.id)}</select></label></div>
- ${p.cat===0?`<p class="boat-price">${icon("boat",16)} ${p.size} · Referência de ${p.budget} € em marisco por barca</p><div class="form-grid three">${input("N.º de barcas","i.qty",entry.qty,'type="number" min="1" max="9999" step="1" required')}${input("Pessoas por barca","i.people",entry.people,'type="number" min="1" max="300" step="1" required')}${input("Marisco por barca (€)","i.budget",entry.budget,'type="number" min="1" max="10000" step="0.01" required')}</div><label class="field"><span>Tipo de serviço</span><select data-field="i.use">${opts(["Refeição","Petisco"].map(x=>[x,x]),entry.use)}</select></label>`:
- `<div class="form-grid">${input("Quantidade ("+p.unit+")","i.qty",entry.qty,`type="number" min="${p.unit==="un."?1:"0.01"}" max="9999" step="${p.unit==="un."?1:"0.01"}" required`)}${p.cat===1?`<label class="field"><span>Preparação</span><select data-field="i.cut">${opts(cuts.map(x=>[x,x]),entry.cut)}</select></label>`:""}</div>`}
- ${input("Instruções do artigo (opcional)","i.note",entry.note,'maxlength="200" placeholder="Ex. embalar em separado"')}
- <button type="submit" class="btn outline">${icon(editIndex<0?"plus":"check",16)}${editIndex<0?"Adicionar à encomenda":"Guardar artigo"}</button>${editIndex>=0?button("","Cancelar edição","canceledit","minor"):""}</div>`;
+function startOrder(){
+ const scope=page==="cliente"?"Cliente":"Equipa";
+ let saved=drafts.get(scope);
+ try{saved=JSON.parse(localStorage.getItem(keyFor(scope)));}catch{}
+ const t=new Date(Date.now()+3600000);
+ draftScope=scope;draftStep=saved?.step||1;hadFormError="";
+ draft=saved?.draft||{channel:scope,requestKey:mkKey(),party:1,occasion:"",occasionOther:"",liked:[],avoid:[],likedText:"",avoidText:"",
+  boatChoice:"auto",boatCount:1,boatUse:"",itemCategory:1,items:[],name:"",type:"particular",phone:"",delivery:"Levantamento",address:"",
+  day:day>lisbonDay(t)?day:lisbonDay(t),time:new Intl.DateTimeFormat("en-GB",{timeZone:"Europe/Lisbon",hour:"2-digit",minute:"2-digit",hourCycle:"h23"}).format(t),note:"",priority:false};
+ for(const item of draft.items){
+  if(item.catalogEntry&&!product(item.product))catalog.push(item.catalogEntry);
+ }
+ openDialog("order");drawForm();
+}
+function normalizedPhone(value){
+ const digits=String(value??"").replace(/[\s()-]/g,"");
+ if(/^[0-9]{9}$/.test(digits))return "+351"+digits;
+ return /^\+[1-9][0-9]{7,14}$/.test(digits)?digits:"";
+}
+const preferences=(o,k)=>[...o[k],o[k+"Text"].trim()].filter(Boolean);
+function suggestion(){
+ const count=Math.ceil(draft.party/10);
+ const size=Object.keys(capacities).find(id=>capacities[id]*count>=draft.party);
+ return {size,count};
+}
+function boatSelection(){
+ return draft.boatChoice==="auto"?suggestion():{size:draft.boatChoice,count:Number(draft.boatCount)};
+}
+function allItems(){
+ const {size,count}=boatSelection();
+ if(size==="none")return draft.items;
+ const people=Math.floor(draft.party/count),extra=draft.party%count;
+ const boats=[];
+ for(const [qty,n] of [[count-extra,people],[extra,people+1]]){
+  if(qty>0)boats.push({product:size,qty,people:n,budget:Number(draft.boatBudget||product(size).budget),use:draft.boatUse||(draft.occasion==="petisco"?"Petisco":"Refeição"),note:""});
+ }
+ return [...boats,...draft.items];
+}
+const input=(label,key,value,attrs="")=>`<label class="field"><span>${label}</span><input data-field="o.${key}" value="${esc(value)}" ${attrs}></label>`;
+function options(group,values,selected){
+ return `<div class="quiz-options">${values.map(([key,label])=>`<button type="button" data-pick="${group}" data-value="${esc(key)}" aria-pressed="${Array.isArray(selected)?selected.includes(key):key===selected}">${esc(label)}</button>`).join("")}</div>`;
+}
+function counter(label,key,value,max){
+ return `<div class="quiz-counter">${input(label,key,value,`type="number" inputmode="numeric" min="1" max="${max}" step="1" required`)}<button type="button" data-count="${key}" data-delta="-1" aria-label="Diminuir ${label}">−</button><button type="button" data-count="${key}" data-delta="1" aria-label="Aumentar ${label}">+</button></div>`;
+}
+function shellfish(group,title){
+ const names=catalog.filter(p=>p.cat===2||p.cat===3||["polvo","tigre","lulas"].includes(p.id)).map(p=>[p.name,p.name]);
+ return `<fieldset><legend>${title}</legend>${options(group,[["none","Sem preferência"],...names],draft[group].length||draft[group+"Text"]?draft[group]:["none"])}
+ ${input("Outro (opcional)",group+"Text",draft[group+"Text"],'maxlength="60"')}</fieldset>`;
+}
+function articleStep(){
+ const auto=suggestion(),{size,count}=boatSelection();
+ const items=draft.items.map((i,n)=>{
+  const p=product(i.product);
+  return `<div class="quiz-line"><strong>${esc(p.name)}</strong><div class="form-grid"><label class="field">Quantidade (${esc(p.unit)})<input data-item="${n}" data-prop="qty" type="number" min="${p.unit==="un."?1:0.01}" step="${p.unit==="un."?1:0.01}" max="9999" value="${esc(i.qty)}" required></label>
+  ${p.cat===1?`<label class="field">Corte<select data-item="${n}" data-prop="cut">${cuts.map(c=>`<option ${c===i.cut?"selected":""}>${c}</option>`).join("")}</select></label>`:""}</div>
+  <label class="field">Instruções (opcional)<input data-item="${n}" data-prop="note" maxlength="200" value="${esc(i.note||"")}"></label>
+  <button type="button" class="btn" data-drop="${n}">Remover ${esc(p.name)}</button></div>`;
+ }).join("");
+ return `<fieldset><legend>Barca (opcional)</legend><p>Sugestão para ${partyLabel(draft.party)}: ${auto.count} × ${product(auto.size).name}.</p>
+ ${options("boatChoice",[["auto","Usar sugestão"],...Object.keys(capacities).map(id=>[id,product(id).name]),["none","Não quero barca"]],draft.boatChoice)}
+ ${size!=="none"?`${draft.boatChoice!=="auto"?counter("Número de barcas","boatCount",count,draft.party):""}
+ <p>${count} × ${product(size).name} · ${product(size).size} · ${fmtQty(draft.boatBudget??product(size).budget)} € de marisco por barca</p>
+ ${input("Marisco por barca (€)","boatBudget",draft.boatBudget??product(size).budget,'type="number" required step="0.01" min="1" max="10000"')}
+ ${options("boatUse",[["Refeição","Refeição"],["Petisco","Petisco"]],draft.boatUse||(draft.occasion==="petisco"?"Petisco":"Refeição"))}`:""}</fieldset>
+ <fieldset><legend>Peixe, marisco e congelados</legend>${options("itemCategory",categories.slice(1).map((c,i)=>[String(i+1),c]),String(draft.itemCategory))}
+ <div class="quiz-options">${catalog.filter(p=>p.cat===Number(draft.itemCategory)).map(p=>`<button type="button" data-add="${esc(p.id)}">+ ${esc(p.name)}</button>`).join("")}</div>${items}</fieldset>`;
+}
+function contactStep(){
+ return `${options("delivery",[["Levantamento","Levantar na loja"],["Entrega","Entrega"]],draft.delivery)}
+ ${draft.delivery==="Entrega"?input("Morada de entrega","address",draft.address,'required maxlength="200"'):""}
+ <div class="form-grid">${input("Dia","day",draft.day,`type="date" min="${dayNow()}" max="${shiftDay(dayNow(),365)}" required`)}${input("Hora","time",draft.time,'type="time" required')}</div>
+ ${input("Nome do cliente ou restaurante","name",draft.name,'required maxlength="80"')}
+ ${options("type",[["particular","Particular"],["restaurante","Restaurante"]],draft.type)}
+ ${input("Telemóvel","phone",draft.phone,'type="tel" inputmode="tel" required maxlength="40" placeholder="Número português ou +indicativo e número"')}
+ <p>Usamos o nome e o telemóvel só para esta encomenda.</p>
+ ${input("Notas (opcional)","note",draft.note,'maxlength="600"')}
+ ${draft.channel==="Equipa"?`<label class="checkfield"><input data-field="o.priority" type="checkbox" ${draft.priority?"checked":""}>Encomenda prioritária</label>`:""}`;
+}
+const partyLabel=n=>fmtQty(n)+" "+(Number(n)===1?"pessoa":"pessoas");
+function review(){
+ const description=[partyLabel(draft.party),occasions[draft.occasion],draft.occasion==="outro"?draft.occasionOther:""].filter(Boolean).join(" · ");
+ return `<p><strong>${esc(description)}</strong></p>${allItems().map(i=>`<p><strong>${esc(label(i))}${product(i.product).cat===0?" × "+fmtQty(i.qty):""}</strong> · ${esc(lineDescription(i))}</p>`).join("")}
+ <p>Marisco preferido: ${esc(preferences(draft,"liked").join(", ")||"Sem preferência")}</p><p>Marisco a evitar: ${esc(preferences(draft,"avoid").join(", ")||"Sem preferência")}</p>
+ <p>${esc(draft.delivery)} · ${esc(draft.day)} às ${esc(draft.time)}${draft.delivery==="Entrega"?" · "+esc(draft.address):""}</p>
+ <p>${esc(draft.name)} · ${esc(draft.phone)}</p>${draft.note?`<p>${esc(draft.note)}</p>`:""}${draft.priority?"<p>Encomenda prioritária</p>":""}`;
 }
 function drawForm(){
- if(!draft)return;
- const customer=draft.channel==="Cliente",title=customer?"A sua encomenda":"Nova encomenda";
- panel.innerHTML=modalHead(customer?"VISTA CLIENTE · DEMO":"EQUIPA · DEMO",title)+`<div class="modal-body"><div class="steps"><span class="${draftStep===1?"current":""}">1 &nbsp; Artigos</span><span class="${draftStep===2?"current":""}">2 &nbsp; Cliente e horário</span></div>${hadFormError?`<div class="error" role="alert">${esc(hadFormError)}</div>`:""}
- ${draftStep===1?`<form id="itemForm">${entryEditor()}</form><div class="cart-title"><strong>Artigos na encomenda</strong><span class="total">${draft.items.length}</span></div><div class="cart-lines">${draft.items.map((i,k)=>`<div class="cart-row"><div><strong>${esc(label(i))} ${product(i.product).cat===0&&i.qty>1?"× "+fmtQty(i.qty):""}</strong><small>${esc(lineDescription(i))}</small></div><button type="button" class="textbtn" data-edit="${k}">Editar</button><button type="button" class="close" data-remove="${k}" aria-label="Remover ${esc(label(i))}">${icon("trash",16)}</button></div>`).join("")||'<p>Adicione o primeiro artigo para continuar.</p>'}</div><div class="form-foot">${button("","Fechar","close","minor")}<button type="button" data-act="next" class="btn primary" ${draft.items.length&&editIndex<0?"":"disabled"}>Continuar</button></div>`:
- `<form id="orderForm"><div class="form-grid">${input("Nome do cliente ou restaurante","o.name",draft.name,'maxlength="80" required autocomplete="name"')}<label class="field"><span>Cliente</span><select data-field="o.type">${opts([["particular","Particular"],["restaurante","Restaurante"]],draft.type)}</select></label></div>
- <div class="form-grid">${input("Contacto (opcional)","o.phone",draft.phone,'type="tel" maxlength="25" autocomplete="tel"')}<label class="field"><span>Modalidade</span><select data-field="o.delivery">${opts(["Levantamento","Entrega"].map(x=>[x,x]),draft.delivery)}</select></label></div>
- ${draft.delivery==="Entrega"?input("Morada de entrega","o.address",draft.address,'maxlength="200" autocomplete="street-address" required'):""}
- <div class="form-grid">${input("Dia","o.day",draft.day,`type="date" min="${dayNow()}" max="${shiftDay(dayNow(),365)}" required`)}${input("Hora pretendida","o.time",draft.time,'type="time" required')}</div><label class="field"><span>Notas de preparação (opcional)</span><textarea data-field="o.note" maxlength="600" rows="2">${esc(draft.note)}</textarea></label>${customer?"":`<label class="checkfield"><input type="checkbox" data-field="o.priority" ${draft.priority?"checked":""}> Encomenda prioritária</label>`}
- <div class="summary"><strong>${draft.items.length===1?"1 artigo":draft.items.length+" artigos"}</strong><span>${esc(draft.items.map(i=>label(i)).join(" · "))}</span></div>
- <p class="helptext">${icon("info",15)} Pedido de demonstração. Não implica pagamento ou reserva.</p><div class="form-foot">${button("","Voltar aos artigos","prev","minor")}<button type="submit" class="btn primary" ${busy?"disabled":""}>${icon("check",16)}${busy?"A registar…":"Confirmar encomenda"}</button></div></form>`}</div>`;
+ const pages=[()=>counter("Número de pessoas","party",draft.party,300),
+  ()=>options("occasion",Object.entries(occasions),draft.occasion)+(draft.occasion==="outro"?input("Descreva a ocasião","occasionOther",draft.occasionOther,'required maxlength="100"'):""),
+  ()=>shellfish("liked","Há algum marisco de que goste especialmente?")+shellfish("avoid","Há algum de que não goste ou não possa comer?"),
+  articleStep,contactStep,review];
+ panel.innerHTML=modalHead("PASSO "+draftStep+" DE 6 · "+steps[draftStep-1],stepTitles[draftStep-1])+`<form id="quizForm" class="modal-body quiz" autocomplete="off">
+ <progress value="${draftStep}" max="6" aria-label="Progresso"></progress>${pages[draftStep-1]()}
+ <p id="quizError" role="alert">${esc(hadFormError)}</p><div class="form-foot"><button type="button" class="btn" data-quiz-back ${busy?"disabled":""}>Voltar</button>
+ <button class="btn primary" type="submit" ${busy?"disabled":""}>${busy?"A registar…":draftStep===6?"Confirmar encomenda":"Continuar"}</button></div></form>`;
+ persistDraft();
+}
+function quizError(){
+ if(draftStep===2&&(!draft.occasion||(draft.occasion==="outro"&&!draft.occasionOther.trim())))return "Indique a ocasião.";
+ if(draftStep===2&&draft.occasion==="outro"&&Array.from(draft.occasionOther).length>100)return "A descrição da ocasião pode ter até 100 caracteres.";
+ if(draftStep===3){
+  for(const key of ["liked","avoid"]){
+   const items=preferences(draft,key);
+   if(items.length>30)return "Escolha até 30 itens por lista de marisco.";
+   if(items.some(s=>Array.from(s).length>60))return "Cada item de marisco pode ter até 60 caracteres.";
+  }
+ }
+ if(draftStep===4&&!allItems().length)return "Adicione pelo menos um artigo para continuar.";
+ if(draftStep===5){
+  if(!normalizedPhone(draft.phone))return "Indique 9 dígitos para Portugal ou + seguido do indicativo e do número (8 a 15 dígitos).";
+  if(!draft.name.trim()||(draft.delivery==="Entrega"&&!draft.address.trim()))return "Preencha os campos obrigatórios.";
+ }
+ return "";
+}
+function quizClick(b){
+ if(busy)return;
+ if(b.hasAttribute("data-quiz-back")){
+  if(draftStep===1){dialog.close();return;}
+  draftStep--;
+ }else if(b.dataset.count){
+  const key=b.dataset.count,max=key==="party"?300:draft.party;
+  draft[key]=Math.max(1,Math.min(max,(Number(draft[key])||0)+Number(b.dataset.delta)));
+ }else if(b.dataset.pick){
+  const key=b.dataset.pick,v=b.dataset.value;
+  if(key==="liked"||key==="avoid"){
+   if(v==="none"){draft[key]=[];draft[key+"Text"]="";}
+   else draft[key]=draft[key].includes(v)?draft[key].filter(x=>x!==v):[...draft[key],v];
+  }else{draft[key]=v;if(key==="boatChoice")delete draft.boatBudget;}
+ }else if(b.dataset.add){
+  if(draft.items.length>=48){notice("Máximo de 48 artigos adicionais.");return;}
+  const p=product(b.dataset.add);
+  const item={product:p.id,qty:1,cut:p.cat===1?cuts[0]:"",note:""};
+  if(p.id.startsWith("custom-"))item.catalogEntry={...p};
+  draft.items.push(item);
+ }else if(b.dataset.drop!==undefined){draft.items.splice(Number(b.dataset.drop),1);}
+ else return;
+ hadFormError="";drawForm();
 }
 async function submitOrder(){
- if(busy)return;busy=true;hadFormError="";drawForm();
+ if(busy)return;
+ if(draft.day<dayNow()||draft.day>shiftDay(dayNow(),365)){
+  draftStep=5;hadFormError="Escolha uma data válida para a encomenda.";drawForm();return;
+ }
+ const pending=draft,scope=draftScope;
+ busy=true;hadFormError="";drawForm();
  try{
- const {order:o}=await request("/api/orders",draft);const scope=draftScope;draft=null;entry=null;draftStep=1;
+ const {order:o}=await request("/api/orders",{...pending,items:allItems()});
+ if(drafts.get(scope)?.draft.requestKey===pending.requestKey)drafts.delete(scope);
+ try{
+  if(JSON.parse(localStorage.getItem(keyFor(scope)))?.draft.requestKey===pending.requestKey)localStorage.removeItem(keyFor(scope));
+ }catch{}
+ if(draft!==pending)return;
+ draft=null;draftStep=1;
  if(scope!=="Cliente"){if(day!==o.day){day=o.day;orders=[];loaded=false;}updateOrder(o);}
- dialogMode="success";panel.innerHTML=modalHead("ENCOMENDA REGISTADA",code(o.id))+`<div class="modal-body success"><div class="success-icon">${icon("check",27)}</div><h3>Encomenda de teste recebida</h3><p>${esc(o.name)} · ${dateText(o.day,{day:"numeric",month:"long"})} às ${esc(o.time)}.</p><div class="summary"><strong>Preparação</strong><span>${esc(Object.keys(o.tasks).map(k=>stations[k]).join(" + "))}</span></div><div class="form-foot">${button("check","Concluir","close","primary")}</div></div>`;render();await sync();
+ dialogMode="success";panel.innerHTML=modalHead("ENCOMENDA REGISTADA","Encomenda confirmada")+`<div class="modal-body success"><strong class="order-number">${esc(code(o.id))}</strong><p>${esc(o.delivery)} · ${esc(o.day)} às ${esc(o.time)}</p>${button("check","Concluir","close","primary")}</div>`;render();await sync();
  }catch(e){hadFormError=e.message||"Não foi possível registar o pedido.";busy=false;drawForm();dialog.scrollTop=0;}finally{busy=false;}
 }
 document.addEventListener("input",e=>{
  const t=e.target;
- if(t.dataset.field&&draft){const [who,k]=t.dataset.field.split(".");(who==="i"?entry:draft)[k]=t.type==="checkbox"?t.checked:t.value;}
+ if(!t.closest("#quizForm")||!draft)return;
+ if(t.dataset.field){const k=t.dataset.field.slice(2);draft[k]=t.type==="checkbox"?t.checked:t.value;}
+ if(t.dataset.item!==undefined)draft.items[Number(t.dataset.item)][t.dataset.prop]=t.dataset.prop==="qty"?Number(t.value):t.value;
+ if(["o.likedText","o.avoidText"].includes(t.dataset.field)){
+  const key=t.dataset.field==="o.likedText"?"liked":"avoid";
+  t.closest("fieldset").querySelector('[data-value="none"]').setAttribute("aria-pressed",!preferences(draft,key).length);
+ }
+ persistDraft();
 });
 document.addEventListener("change",e=>{
  const t=e.target;
  if(t.id==="cancelReason"){const other=$("#otherReason");other.hidden=t.value!=="Outro";other.querySelector("input").required=!other.hidden;return;}
  if(t.id==="orderDay"){setDay(t.value);return;}
- if(t.id==="productPick"||t.id==="categoryPick"){entry=defaultEntry(t.id==="productPick"?t.value:catalog.find(p=>p.cat===+t.value).id);drawForm();return;}
- if(t.dataset.field==="o.delivery"){draft.delivery=t.value;drawForm();return;}
+
 });
 document.addEventListener("submit",e=>{
  if(e.target.id==="historyConfirm"){
@@ -365,12 +530,17 @@ document.addEventListener("submit",e=>{
   if(action==="cancel"&&!reason){notice("Indique um motivo.");return;}
   dialogMode="detail";drawDetail();mutate(confirmOrder,action,{reason});return;
  }
- if(e.target.id==="itemForm"){e.preventDefault();if(editIndex<0&&draft.items.length>=50){notice("Máximo de 50 artigos por encomenda.");return;}
- const p=product(entry.product);const item={...entry,qty:Number(entry.qty),people:Number(entry.people),budget:Number(entry.budget)};
- if(editIndex>=0)draft.items[editIndex]=item;else draft.items.push(item);editIndex=-1;entry=defaultEntry(p.id);drawForm();notice("Artigo guardado na encomenda.");}
- if(e.target.id==="orderForm"){e.preventDefault();submitOrder();}
+ if(e.target.id==="quizForm"){
+  e.preventDefault();if(busy)return;
+  hadFormError=quizError();if(hadFormError){$("#quizError").textContent=hadFormError;return;}
+  if(draftStep===6){submitOrder();return;}
+  draft.boatCount=Math.min(Number(draft.boatCount)||1,Number(draft.party));
+  draftStep++;drawForm();dialog.scrollTop=0;
+ }
 });
 document.addEventListener("click",async e=>{
+ const picker=e.target.closest("#quizForm .field")?.querySelector('input[type="date"],input[type="time"]');
+ if(picker?.showPicker){try{picker.focus();picker.showPicker();e.preventDefault();return;}catch{/* Preferência nativa do navegador. */}}
  if(e.target===dialog){const rect=dialog.getBoundingClientRect();if(e.clientX<rect.left||e.clientX>rect.right||e.clientY<rect.top||e.clientY>rect.bottom){if(!busy)dialog.close();}return;}
  const b=e.target.closest("button");if(!b)return;
  if(b.dataset.station){selectStation(b.dataset.station);return;}
@@ -382,22 +552,18 @@ document.addEventListener("click",async e=>{
  if(b.dataset.advance){await mutate(findOrder(b.dataset.advance),"advance",{station:b.dataset.s||station});return;}
  if(b.dataset.handoff){await mutate(findOrder(b.dataset.handoff),"handoff");return;}
  if(b.dataset.task){await mutate(findOrder(detailId),b.dataset.task,{station:b.dataset.s||station});return;}
- if(b.dataset.startcat!==undefined){startOrder(+b.dataset.startcat);return;}
- if(b.dataset.edit!==undefined){editIndex=+b.dataset.edit;entry={...draft.items[editIndex]};drawForm();dialog.scrollTop=0;return;}
- if(b.dataset.remove!==undefined){draft.items.splice(+b.dataset.remove,1);editIndex=-1;entry=defaultEntry(entry.product);drawForm();return;}
+ if(b.closest("#quizForm")&&b.type==="button"){quizClick(b);return;}
  const act=b.dataset.act;
  if(act==="new")startOrder();
  if(act==="close"&&!busy)dialog.close();
- if(act==="next"||act==="prev"){if(act==="next"&&!draft.items.length)return;draftStep=act==="next"?2:1;hadFormError="";drawForm();dialog.scrollTop=0;}
- if(act==="canceledit"){editIndex=-1;entry=defaultEntry(entry.product);drawForm();}
  if(act==="focus"){focusMode=!focusMode;try{localStorage.setItem("ddm-modo-posto",String(focusMode))}catch{}document.body.classList.toggle("focus",focusMode);render();try{if(focusMode&&!document.fullscreenElement)await document.documentElement.requestFullscreen();else if(!focusMode&&document.fullscreenElement)await document.exitFullscreen();}catch{}}
 });
 dialog.addEventListener("cancel",e=>{if(busy)e.preventDefault();});
-dialog.addEventListener("close",()=>{detailId=null;dialogMode="";});
+dialog.addEventListener("close",()=>{if(!dialog.open){detailId=null;dialogMode="";}});
 // O modo posto mantém-se mesmo quando o navegador sai do ecrã inteiro.
 window.addEventListener("hashchange",route);window.addEventListener("online",sync);
 window.addEventListener("offline",()=>{++serial;synced=false;networkProblem=true;renderSync();});
 document.addEventListener("visibilitychange",()=>{if(!document.hidden)sync();});
 document.querySelector("#retrySync").onclick=sync;
 setInterval(()=>{if(!document.hidden&&!busy)sync();},3500);route();
-setInterval(updateClock,1000);
+setInterval(()=>{updateClock();refreshDeadlines();},1000);
