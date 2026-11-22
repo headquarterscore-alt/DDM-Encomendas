@@ -5,13 +5,22 @@
 <meta name="theme-color" content="#0b2942"><meta name="description" content="Encomendas e preparação nos dois postos da Delicias do Mar. Aplicação de demonstração.">
 <title>Encomendas · Delicias do Mar</title><link rel="icon" href="./marca.png"><link rel="stylesheet" href="./estilo.css">
 <link rel="manifest" href="./app.webmanifest"><link rel="apple-touch-icon" href="./icon-180.png"><meta name="apple-mobile-web-app-capable" content="yes"></head>
-<body>
+<body class="session-locked">
 <header class="top"><div class="top-in">
 <a href="#encomendas" class="brand" aria-label="Delicias do Mar, encomendas"><img src="./marca.png" alt=""><span>Delicias do Mar<small>LOULÉ · ALGARVE</small></span></a>
 <nav aria-label="Navegação principal"><a data-nav="encomendas" href="#encomendas"><i data-icon="columns"></i>Encomendas</a><a data-nav="historico" href="#historico"><i data-icon="list"></i>Histórico</a><a data-nav="cliente" href="#cliente"><i data-icon="store"></i>Cliente</a></nav>
+<button type="button" class="btn" id="signOut" hidden>Terminar sessão</button>
 <button id="installApp" type="button">Instalar app</button>
 </div></header><div id="networkStatus" role="status" hidden><span></span><button id="retrySync">Tentar novamente</button></div>
 <dialog id="installHelp" aria-labelledby="installTitle"><h2 id="installTitle">Instalar Delicias do Mar</h2><p id="installInstructions"></p><button id="closeInstall" class="btn">Fechar</button></dialog>
+<section id="loginPanel" aria-labelledby="loginHeading">
+<h1 id="loginHeading">Inicia sessão</h1>
+<form id="loginForm" method="post">
+<label class="field">E-mail da equipa<input id="loginEmail" type="email" autocomplete="username" required></label>
+<label class="field">Palavra-passe<input id="loginPassword" type="password" autocomplete="current-password" required></label>
+<p id="loginMessage" role="status"></p>
+<button class="btn primary" type="submit">Iniciar sessão</button>
+</form></section>
 <main id="main" tabindex="-1"></main>
 <dialog id="dialog" aria-labelledby="dialog-title"><div id="dialogContent"></div></dialog>
 <div id="undoNotice" hidden><span role="status"></span> <button type="button" data-quick-undo class="btn">Desfazer</button></div>

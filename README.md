@@ -25,7 +25,7 @@ O posto das Barcas recolhe e coze o seu próprio marisco. O posto Peixe-Marisco 
 
 Cria um ramo para a alteração e abre um pull request. Abre a pré-visualização no PC da loja e no telemóvel. Junta a alteração a `main` depois de a aprovares.
 
-Para gerar a pasta publicável localmente, usa Node.js 22.12 ou superior e executa `node build.mjs`. Os ficheiros para editar ficam em `src`. Cada alteração ao conteúdo gera uma nova versão da cache da app.
+Para gerar a pasta publicável localmente, usa Node.js 22.12 ou superior e executa `npm ci` e `npm run build`. Os ficheiros para editar ficam em `src`. Cada alteração ao conteúdo gera uma nova versão da cache da app.
 
 ## Modo posto tátil
 
@@ -57,6 +57,17 @@ Depois de confirmar um levantamento ou entrega, **Desfazer** fica disponível du
 
 Rever [002_historico.sql](migrations/002_historico.sql) depois de [001_fluxo_postos.sql](migrations/001_fluxo_postos.sql), antes de publicar a interface. As ações de preparação, entrega, cancelamento, reabertura e desfazer acrescentam um evento na mesma transação. O posto do dispositivo fica por preencher quando uma versão antiga da app não o envia.
 
+## Acesso da equipa e publicação em duas fases
+
+A PWA usa o cliente oficial do Supabase Auth para iniciar sessão por e-mail e palavra-passe, guardar a sessão no navegador e renovar o token. Os pedidos de dados e as ações enviam o token da equipa. Ao terminar a sessão ou se a renovação falhar definitivamente, a app mostra **Inicia sessão**. Os postos mantêm a preferência do dispositivo.
+
+1. No projeto Lovable ligado a esta base, abre **More → Users** e as definições de autenticação. Desativa a inscrição pública e o login anónimo, ativa **Email / password** e verifica que as contas existentes com acesso são da equipa. A regra da 004 autoriza o papel `authenticated`. Em **Add user → Create new user**, introduz tu o e-mail e a palavra-passe de cada conta da equipa.
+2. Publica primeiro o código de login. O build do Cloudflare não executa os ficheiros SQL. Abre o endereço de **produção** nos dois tablets, inicia sessão, escolhe o posto, recarrega e confirma que aparece **Ligado**. A sessão da pré-visualização pertence a outro endereço.
+3. Só após confirmação dos dois tablets, aplicar [004_acesso_equipa.sql](migrations/004_acesso_equipa.sql) e repetir os testes diretos de leitura e das funções na base partilhada. Se for necessário repor o acesso anterior, usar [a reversão](migrations/rollback/004_acesso_equipa.sql). A reversão reabre a leitura pública das encomendas. A [revogação de reset_demo](migrations/003a_revogar_reset_demo.sql) é independente.
+4. Quando a equipa precisar de terminar a sessão num tablet, usar **Terminar sessão**. A app não disponibiliza registo público.
+
+A matriz [tests/acessos.cjs](tests/acessos.cjs) foi executada por HTTP contra PostgREST com a opção `db-tx-end=rollback` e PostgreSQL descartável. Anónimo recebeu 401 nas quatro tabelas e nas sete funções. O papel autenticado recebeu 200 em orders, order_items, station_tasks, create_order, update_task, change_order_status, hand_off e lisbon_today; recebeu 403 em order_events, reset_demo e create_order_before_003. A migração e a reversão foram também comparadas quanto a permissões, sequências e políticas RLS.
+
 ## Testes dos dois postos
 
 Com Node.js 22.12+ e npm:
@@ -72,4 +83,4 @@ O teste usa duas sessões de navegador com armazenamento independente e uma API 
 
 Os testes não alteram `docs/`. Para refazer as imagens dos postos, junta `--update-images` (por exemplo `node tests/postos.cjs --update-images`).
 
-`npm run test:live` repete o percurso essencial na base de demonstração: **cria uma encomenda fictícia identificada como TESTE POSTOS**, conclui os dois postos e regista a entrega para a retirar da fila. Não executar contra uma base de produção. As duas sessões só partilham os dados do servidor, nunca o armazenamento local.
+O teste live requer uma conta de testes existente, fornecida localmente por `DDM_TEST_EMAIL` e `DDM_TEST_PASSWORD`. `npm run test:live` repete o percurso essencial na base de demonstração: **cria uma encomenda fictícia identificada como TESTE POSTOS**, conclui os dois postos e regista a entrega para a retirar da fila. Não executar contra uma base de produção. As duas sessões só partilham os dados do servidor, nunca o armazenamento local.
