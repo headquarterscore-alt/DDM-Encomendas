@@ -22,17 +22,28 @@ module.exports=async function testQuestionnaire(browser,url,base){
   return route.fulfill({json:id?rows.filter(o=>o.id===id):rows});
  });
  const p=await context.newPage(),button=name=>p.getByRole('button',{name,exact:true}),click=name=>button(name).click();
+ const pad=p.locator('[data-ink] canvas');
+ async function drawName(){
+  await pad.scrollIntoViewIfNeeded();
+  const box=await pad.boundingBox();
+  await p.mouse.move(box.x+box.width*.16,box.y+box.height*.63);
+  await p.mouse.down();
+  await p.mouse.move(box.x+box.width*.24,box.y+box.height*.25,{steps:5});
+  await p.mouse.move(box.x+box.width*.34,box.y+box.height*.62,{steps:5});
+  await p.mouse.move(box.x+box.width*.45,box.y+box.height*.39,{steps:5});
+  await p.mouse.up();
+ }
  try{
   for(const [idx,occasion] of ['Refeição','Evento','Petisco','Outro'].entries()){
-   const delivery=idx<2,fishOnly=idx===1;
+   const people=idx===1?0:idx===2?1:12;
    await p.goto(url+'/#cliente');
    // A 1.ª vez abre sozinho ao entrar no separador. Depois, o cliente carrega em «Começar encomenda».
    if(idx>0)await click('Começar encomenda');
-   assert.equal(await p.getByLabel('Número de pessoas',{exact:true}).inputValue(),'1');
-   await p.getByLabel('Número de pessoas',{exact:true}).fill('12');await click('Continuar');
+   const slider=p.getByRole('slider');assert.equal(await slider.inputValue(),'0');
+   if(people)await slider.fill(String(people));await click('Continuar');
    await click(occasion);
-   if(occasion==='Outro')await p.getByLabel('Descreva a ocasião',{exact:true}).fill('Aniversário');
-   await click('Continuar');
+   if(occasion==='Outro'){await click('Continuar');}
+   await p.getByText('Marisco a evitar',{exact:true}).click();
    const avoid=p.getByRole('group',{name:'Há algum de que não goste ou não possa comer?'});
    await avoid.getByRole('button',{name:'Ostras',exact:true}).click();
    if(idx===0){
@@ -41,22 +52,31 @@ module.exports=async function testQuestionnaire(browser,url,base){
     assert.equal(await avoid.getByRole('button',{name:'Ostras',exact:true}).getAttribute('aria-pressed'),'true');
    }
    await click('Continuar');
-   if(fishOnly){
-    await click('Não quero barca');await click('Continuar');
-    assert.match(await p.locator('#quizError').innerText(),/pelo menos um artigo/);
+   assert.equal(await p.locator('.boat-options button').count(),3);
+   if(!people)assert.match(await p.locator('.budget-title').innerText(),/50 €/);
+   if(people===1){
+    const value=p.getByRole('slider',{name:'Ajustar valor da barca'});
+    for(const [id,min] of [['bm','100'],['bg','200'],['bp','50']]){
+     await p.locator(`.boat-options [data-value="${id}"]`).click();
+     assert.equal(await value.inputValue(),min);
+    }
    }
-   if(idx===3){await click('Barca grande');await click('Aumentar Número de barcas');}
-   await click('+ Robalo');await click('Continuar');
-   if(delivery){await click('Entrega');await p.getByLabel('Morada de entrega').fill('Morada de teste');}
-   await p.getByLabel('Nome do cliente ou restaurante').fill('TESTE LOCAL');
+   await click('Continuar');
+   if(idx===0){
+    await click('Continuar');
+    assert.match(await p.locator('#quizError').innerText(),/Desenhe o nome/);
+   }
+   await drawName();
    await p.getByLabel('Hora',{exact:true}).fill('00:00');
    await p.getByLabel('Dia',{exact:true}).fill(new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Lisbon'}).format(new Date()));
    assert.equal(await p.getByLabel('Encomenda prioritária').count(),0);
-   await p.getByLabel('Telemóvel',{exact:true}).fill('123');await click('Continuar');
+   await p.getByLabel('Telemóvel (opcional)',{exact:true}).fill('123');await click('Continuar');
    assert.match(await p.locator('#quizError').innerText(),/9 dígitos/);
    const phone=['+44 7700 900123','+351 900 000 000','900000000','+1 (202) 555-0143'][idx];
-   await p.getByLabel('Telemóvel',{exact:true}).fill(phone);await click('Continuar');
-   await click('Voltar');assert.match(await p.getByLabel('Nome do cliente ou restaurante').inputValue(),/TESTE LOCAL/);
+   await p.getByLabel('Telemóvel (opcional)',{exact:true}).fill(phone);await click('Continuar');
+   const drawnName=await p.getByRole('img',{name:'Nome manuscrito'}).getAttribute('src');
+   await click('Voltar');
+   await pad.locator('..').getByRole('button',{name:'Limpar desenho'}).waitFor();
    await click('Continuar');await click('Confirmar encomenda');
    if(idx===0){
     await p.getByText('Resposta perdida (teste)',{exact:true}).waitFor();
@@ -66,25 +86,70 @@ module.exports=async function testQuestionnaire(browser,url,base){
    if(idx===0)assert.equal(attempts[0],attempts[1]);
    assert.equal(await p.locator('.order-number').innerText(),'TESTE-quiz-'+(idx+1));
    const data=submitted[idx];
+   assert.equal(data.customer_name,'ddm-ink:'+drawnName.split(',')[1]);
    assert.equal(data.customer_phone,['+447700900123','+351900000000','+351900000000','+12025550143'][idx]);
-   assert.equal(data.fulfilment,delivery?'entrega':'recolha');
-   assert.equal(data.address,delivery?'Morada de teste':'');
+   assert.equal(data.fulfilment,'recolha');
+   assert.equal(data.address,'');
    assert.equal(data.priority,'normal');
    assert.equal(data.occasion,['refeicao','evento','petisco','outro'][idx]);
-   assert.equal(data.occasion_other,idx===3?'Aniversário':null);
+   assert.equal(data.occasion_other,null);
    assert.deepEqual(data.shellfish_avoid,['Ostras']);
-   assert.ok(data.client_token);assert.equal(data.party_size,12);
+   assert.ok(data.client_token);assert.equal(data.party_size,people||null);
    const boats=data.items.filter(i=>i.category==='barcas');
-   assert.equal(boats.reduce((n,i)=>n+i.quantity*i.people,0),fishOnly?0:12);
+   assert.equal(boats.reduce((n,i)=>n+i.quantity*i.people,0),people);
    assert.ok(boats.every(i=>i.meal_type===(idx===2?'petisco':'refeicao')));
    assert.equal(await p.evaluate(scope=>Object.keys(localStorage).find(k=>k.startsWith('ddm-questionario-2-')&&k.endsWith('-'+scope))||null,'Cliente'),null);
    await click('Concluir');
   }
-  await p.goto(url+'/#encomendas/bancada');
+  await p.goto(url+'/#encomendas/barcas');
   const card=p.locator('[data-order="quiz-1"]');
   assert.match(await card.innerText(),/Marisco a evitar.*Ostras/s);
   assert.equal(await card.getByRole('link',{name:'Ligar ao cliente'}).getAttribute('href'),'tel:+447700900123');
-  await card.locator('.ref').click();assert.match(await p.locator('#dialog').innerText(),/Ostras/);
-  console.log('PASS: questionário do Cliente: quatro ocasiões, entrega e levantamento, só peixe, telemóvel, rascunho e contacto no posto');
+  assert.ok(await card.locator('.boat-title .boat-late').isVisible());
+  assert.equal(await card.locator('.name-drawing').getAttribute('src'),'data:image/png;base64,'+submitted[0].customer_name.slice(8));
+  await card.locator('.ticket-customer').click();assert.match(await p.locator('#dialog').innerText(),/Ostras/);
+  assert.equal(await p.locator('#dialog .name-drawing').count(),1);
+  await click('Fechar');
+  await p.goto(url+'/#encomendas/barcas');await click('Encomendar barca');
+  if(process.argv.includes('--update-images'))await p.locator('#dialog').screenshot({path:require('node:path').resolve(__dirname,'../docs/postos/pessoas.png')});
+  await p.getByRole('slider').fill('6');await click('Continuar');await click('Refeição');await click('Continuar');
+  assert.match(await p.locator('.boat-options [aria-pressed=true]').innerText(),/Barca média/);
+  const photos=p.locator('.boat-options img');
+  await p.waitForFunction(()=>[...document.querySelectorAll('.boat-options img')].every(img=>img.complete&&img.naturalWidth>0));
+  assert.deepEqual(await photos.evaluateAll(nodes=>nodes.map(img=>img.getAttribute('src'))),[
+   './barca_pequena.png','./barca_media.png','./barca_grande.png'
+  ]);
+  if(process.argv.includes('--boat-image'))await p.locator('#dialog').screenshot({path:require('node:path').resolve(__dirname,'../docs/postos/escolher-barca.png')});
+  await p.locator('.boat-options [data-value="bg"]').click();
+  assert.equal(await p.locator('.boat-options [data-value="bg"]').getAttribute('aria-pressed'),'true');
+  const slider=p.getByRole('slider',{name:'Ajustar valor da barca'});
+  assert.equal(await slider.inputValue(),'200');
+  assert.equal(await slider.getAttribute('min'),'0');
+  assert.equal(await slider.getAttribute('max'),'400');
+  assert.equal(await slider.getAttribute('step'),'10');
+  await slider.fill('0');
+  await click('Continuar');
+  assert.match(await p.locator('#quizError').innerText(),/50 €/);
+  for(const [value,size] of [['90','bp'],['100','bm'],['190','bm'],['200','bg'],['270','bg']]){
+   await slider.fill(value);
+   assert.equal(await p.locator('.boat-options [aria-pressed=true]').getAttribute('data-value'),size);
+   assert.equal(await p.locator('.budget-title output').innerText(),value+' €');
+  }
+  await click('Continuar');await p.getByLabel('Encomenda prioritária').check();
+  await p.getByLabel('Hora',{exact:true}).fill('00:00');
+  await drawName();
+
+  await p.reload();await click('Encomendar barca');
+  assert.equal(await p.getByLabel('Encomenda prioritária').isChecked(),true);
+  await click('Continuar');await click('Confirmar encomenda');await p.locator('.order-number').waitFor();
+  assert.equal(submitted.at(-1).source,'equipa');assert.equal(submitted.at(-1).party_size,6);
+  assert.equal(submitted.at(-1).priority,'alta');assert.equal(submitted.at(-1).customer_phone,null);
+  assert.equal(submitted.at(-1).items[0].budget,270);
+  assert.equal(submitted.at(-1).items[0].barca_size,'grande');
+  await click('Concluir');
+  const noPhone=p.locator('[data-order="quiz-5"]');
+  await noPhone.locator('.name-drawing').waitFor();
+  assert.equal(await noPhone.locator('.boat-contact').count(),0);
+  console.log('PASS: questionário do Cliente: escrita do nome, preço, levantamento, campos opcionais e rascunho');
  }finally{await context.close();}
 };

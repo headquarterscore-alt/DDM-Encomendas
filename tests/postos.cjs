@@ -10,7 +10,7 @@ const source=readFileSync(resolve(root,'src/app.js'),'utf8');
 const base=source.match(/const base="([^"]+)"/)[1];
 const apikey=source.match(/publicKey="([^"]+)"/)[1];
 const day=new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Lisbon'}).format(new Date());
-const customer='TESTE POSTOS · Restaurante Mar Azul '+Date.now();
+const customer=live?'TESTE POSTOS · Restaurante Mar Azul '+Date.now():'Restaurante Mar Azul';
 const payload={customer_name:customer,customer_type:'restaurante',fulfilment:'recolha',address:'',scheduled_time:'19:30',business_date:day,source:'equipa',priority:'normal',notes:'Encomenda fictícia para validar a PR. Não preparar.',client_token:crypto.randomUUID(),items:[
  {category:'barcas',product:'Barca média',quantity:1,unit:'un',barca_size:'media',meal_type:'refeicao',people:6,budget:100},
  {category:'peixe_fresco',product:'Robalo',quantity:2.5,unit:'kg',cut:'em filetes'},
@@ -91,26 +91,33 @@ async function until(fn,message){for(let i=0;i<100;i++){if(await fn())return;awa
    assert.equal(await p.locator('[data-clock]').innerText(),expected);
   }
   assert.match(await card(bancada).innerText(),new RegExp('Robalo[\\s\\S]*2,5 kg[\\s\\S]*Em filetes[\\s\\S]*Dourada[\\s\\S]*4 '+(live?'kg':'un\\.')+'[\\s\\S]*Amanhado'));
-  assert.match(await card(barcas).innerText(),/19:30[\s\S]*Barca média[\s\S]*6 pessoas[\s\S]*75 × 24 cm/);
+  assert.match(await card(barcas).innerText(),/100 €[\s\S]*Barca média/);
   assert.equal(await card(bancada).getByText('Barca média',{exact:true}).count(),0);
   const click=async(p,text)=>{await card(p).getByRole('button',{name:text,exact:true}).click();await until(async()=>await p.locator('#writeStatus').innerText()==='Alteração guardada.','mutation was not confirmed: '+text);};
   if(!live){
-   await card(barcas).getByRole('button',{name:'Iniciar',exact:true}).evaluate(b=>{b.click();b.click();});
+   await card(barcas).getByRole('button',{name:'Pronta',exact:true}).evaluate(b=>{b.click();b.click();});
    assert.equal(await barcas.locator('#writeStatus').innerText(),'A guardar…');
-   assert.ok(await card(barcas).getByRole('button',{name:'Iniciar',exact:true}).isDisabled());
+   assert.ok(await card(barcas).getByRole('button',{name:'Pronta',exact:true}).isDisabled());
    await until(()=>Promise.resolve(mutations===1),'one request');
    await until(async()=>await barcas.locator('#writeStatus').innerText()==='Alteração guardada.','save complete');
    await wait(500);assert.equal(mutations,1,'double tap sent one write');
-  }else await click(barcas,'Iniciar');
+   const undoBarca=card(barcas).locator('.ticket-completion');
+   assert.match(await undoBarca.innerText(),/Barcas concluídas/);
+   if(process.argv.includes('--update-images'))await undoBarca.screenshot({path:resolve(root,'docs/postos/desfazer.png')});
+   await undoBarca.getByRole('button',{name:'Desfazer'}).evaluate(b=>{b.click();b.click();});
+   await until(async()=>await card(barcas).getByRole('button',{name:'Pronta',exact:true}).isEnabled(),'undo ready returned the card');
+   assert.equal(mutations,2);assert.deepEqual(fixture.station_tasks.map(t=>t.status),['por_iniciar','por_iniciar']);
+   assert.ok(await undoBarca.isHidden());await click(barcas,'Pronta');
+  }else await click(barcas,'Pronta');
   assert.ok(barcas.url().endsWith('#encomendas/barcas'),'legacy shortcut redirected');
   await barcas.setViewportSize({width:390,height:900});
-  for(const [index,label] of ['Por iniciar','Em preparação','Prontas'].entries()){
+  for(const [index,label] of ['Por preparar','Prontas'].entries()){
    await barcas.getByRole('button',{name:label,exact:true}).click();
    assert.deepEqual(await barcas.locator('.lane:visible h3').allTextContents(),[label]);
    assert.equal(await card(barcas).count(),index===1?1:0);
   }
   await barcas.setViewportSize({width:1440,height:1100});
-  assert.equal(await barcas.locator('.lane:visible').count(),3);
+  assert.equal(await barcas.locator('.lane:visible').count(),2);
   await barcas.getByRole('button',{name:'Todas',exact:true}).click();
   assert.ok(await card(barcas).isVisible());
   await barcas.getByRole('link',{name:'Histórico'}).click();
@@ -127,16 +134,20 @@ async function until(fn,message){for(let i=0;i<100;i++){if(await fn())return;awa
    await bancada.screenshot({path:resolve(root,imageDir,'bancada.png'),fullPage:true});
    for(const p of pages)await p.setViewportSize({width:1440,height:1100});
   }
-  await click(barcas,'Barca pronta');
   assert.match(await card(barcas).innerText(),/A aguardar Peixe-Marisco/);
+  if(!live)fixture.station_tasks.find(t=>t.station==='bancada').status='em_preparacao';
   await bancada.reload();await card(bancada).waitFor();
-  assert.ok(await card(bancada).getByRole('button',{name:'Iniciar',exact:true}).isVisible(),'fish still pending');
+  assert.equal(await bancada.getByRole('button',{name:'Iniciar',exact:true}).count(),0);
+  assert.equal(await bancada.getByRole('button',{name:'Em preparação',exact:true}).count(),0);
+  assert.deepEqual(await bancada.locator('.lane h3').allTextContents(),['Por preparar','Prontas']);
+  assert.equal(await card(bancada).locator('.ticket-customer strong').innerText(),customer);
+  assert.ok(await card(bancada).getByRole('button',{name:'Pronta',exact:true}).isVisible(),'fish still pending');
   assert.equal(await card(barcas).getByRole('button',{name:'Confirmar levantamento',exact:true}).count(),0);
   assert.equal(await card(bancada).getByRole('button',{name:'Confirmar levantamento',exact:true}).count(),0);
   // Also check the complete-order detail, not only the board.
-  await card(barcas).locator('.ref').click();assert.equal(await barcas.locator('[data-task="handoff"]').count(),0);await barcas.getByRole('button',{name:'Fechar',exact:true}).click();
+  await card(barcas).locator('.ticket-customer').click();assert.equal(await barcas.locator('[data-task="handoff"]').count(),0);await barcas.getByRole('button',{name:'Fechar',exact:true}).click();
   if(!live){
-   await card(bancada).locator('.ref').click();
+   await card(bancada).locator('.ticket-customer').click();
    await bancada.getByRole('button',{name:'Cancelar encomenda'}).click();
    await bancada.getByLabel('Motivo',{exact:true}).selectOption('Outro');
    await bancada.locator('#otherReason input').fill('Pedido repetido por telefone');
@@ -145,21 +156,28 @@ async function until(fn,message){for(let i=0;i<100;i++){if(await fn())return;awa
    await bancada.getByRole('button',{name:'Fechar',exact:true}).click();
    assert.equal(await card(bancada).count(),0);
    await bancada.getByRole('link',{name:'Histórico'}).click();
-   assert.deepEqual(await bancada.locator('[data-list]').allTextContents(),['Todas','Por iniciar','Em preparação','Prontas','Entregues','Canceladas']);
-   await bancada.getByRole('button',{name:'Em preparação',exact:true}).click();
+   await bancada.locator('.list-tabs').waitFor();
+   assert.deepEqual(await bancada.locator('[data-list]').allTextContents(),['Todas','Por preparar','Prontas','Entregues','Canceladas']);
+   await bancada.getByRole('button',{name:'Por preparar',exact:true}).click();
    assert.equal(await bancada.locator('.table-row[data-detail]').count(),0);
    await bancada.getByRole('button',{name:'Canceladas',exact:true}).click();
    await bancada.locator('.table-row[data-detail]').click();
    assert.match(await bancada.locator('#dialog').innerText(),/Pedido repetido por telefone/);
    await bancada.getByRole('button',{name:'Reabrir',exact:true}).click();
    await bancada.getByRole('button',{name:'Cancelar encomenda'}).waitFor();
-   assert.deepEqual(fixture.station_tasks.map(t=>t.status),['pronta','por_iniciar']);
+   assert.deepEqual(fixture.station_tasks.map(t=>t.status),['pronta','em_preparacao']);
    await bancada.getByRole('button',{name:'Fechar',exact:true}).click();
    await bancada.getByRole('link',{name:'Encomendas',exact:true}).click();
   }
-  await click(bancada,'Iniciar');
-  if(!live){failNext=true;await card(bancada).getByRole('button',{name:'Preparação pronta',exact:true}).click();await until(async()=>await bancada.locator('#writeStatus').innerText()==='Confirma o estado antes de tentar novamente.','failure feedback');assert.ok(await card(bancada).getByRole('button',{name:'Preparação pronta',exact:true}).isEnabled());}
-  await click(bancada,'Preparação pronta');
+  if(!live){failNext=true;await card(bancada).getByRole('button',{name:'Pronta',exact:true}).click();await until(async()=>await bancada.locator('#writeStatus').innerText()==='Confirma o estado antes de tentar novamente.','failure feedback');assert.ok(await card(bancada).getByRole('button',{name:'Pronta',exact:true}).isEnabled());}
+  await click(bancada,'Pronta');
+  if(!live)assert.equal(fixture.station_tasks.find(t=>t.station==='bancada').status,'pronta');
+  if(!live){
+   await bancada.locator('[data-quick-undo]').click();
+   await until(async()=>await card(bancada).getByRole('button',{name:'Pronta',exact:true}).isEnabled(),'legacy status restored');
+   assert.deepEqual(fixture.station_tasks.map(t=>t.status),['pronta','em_preparacao']);
+   await click(bancada,'Pronta');
+  }
   await barcas.reload();await card(barcas).waitFor();
   for(const p of pages)assert.ok(await card(p).getByRole('button',{name:'Confirmar levantamento',exact:true}).isVisible(),'handoff only after both ready');
   // Reopen root URL in fresh pages; the two contexts retain separate device preferences.
@@ -187,14 +205,14 @@ async function until(fn,message){for(let i=0;i<100;i++){if(await fn())return;awa
    fixture.fulfilment='entrega';
    await pages[0].reload();
    await card(pages[0]).getByRole('button',{name:'Confirmar entrega',exact:true}).waitFor();
-   await card(pages[0]).locator('.ref').click();
+   await card(pages[0]).locator('.ticket-customer').click();
    assert.equal(await pages[0].locator('[data-task="handoff"]').innerText(),'Confirmar entrega');
    fixture.fulfilment='recolha';
    await pages[1].reload();
    await card(pages[1]).waitFor();
   }
   await click(pages[1],'Confirmar levantamento');
-  await until(async()=>await card(pages[1]).count()===0,'handed order removed');
+  assert.equal(await card(pages[1]).locator('[data-handoff]').count(),0);
   if(!live){
    const p=pages[1];
    await p.getByRole('button',{name:'Desfazer',exact:true}).click();
@@ -203,6 +221,7 @@ async function until(fn,message){for(let i=0;i<100;i++){if(await fn())return;awa
    const undo=p.getByRole('button',{name:'Desfazer',exact:true});
    await undo.waitFor();await wait(7000);assert.ok(await undo.isVisible());
    await undo.waitFor({state:'hidden',timeout:2000});
+   await card(p).waitFor({state:'hidden'});
    for(const device of pages){
     await device.goto(url+'/#historico');
     await device.getByRole('button',{name:'Entregues',exact:true}).click();

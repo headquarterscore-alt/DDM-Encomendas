@@ -47,7 +47,7 @@ const version = 'ddm-postos-' + hash.digest('hex').slice(0, 14);
 must(template, '__DDM_CACHE__');
 must(template, '"__DDM_ASSETS__"');
 const worker = template.replace('__DDM_CACHE__', version)
-  .replace('"__DDM_ASSETS__"', () => JSON.stringify(files.filter(file => file !== 'index.html')));
+  .replace('"__DDM_ASSETS__"', () => JSON.stringify(files.filter(file => file !== "index.html")));
 writeFileSync(resolve(dist, 'sw.js'), worker);
 writeFileSync(resolve(dist, 'index.html'), page);
 console.log('App preparada em dist/ (' + version + ').');

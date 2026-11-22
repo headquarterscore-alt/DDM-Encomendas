@@ -1,6 +1,6 @@
 const assert=require('node:assert/strict');
 
-// Nova encomenda da equipa: botão «+» verde e formulário rápido (o questionário é só do Cliente).
+// Entrada direta para os artigos no posto Peixe-Marisco.
 module.exports=async function testQuick(browser,url,base){
  const context=await browser.newContext({serviceWorkers:'block',viewport:{width:1024,height:900}});
  await require('./auth.cjs').prepareSession(context);
@@ -24,29 +24,25 @@ module.exports=async function testQuick(browser,url,base){
   await p.goto(url+'/#encomendas/bancada');
   const plus=button('Nova encomenda');
   await plus.waitFor();
-  // Só um «+»: sem texto visível, verde e com alvo grande.
-  assert.equal((await plus.innerText()).trim(),'');
+  assert.equal((await plus.innerText()).trim(),'Nova encomenda');
   const box=await plus.boundingBox();
   assert.ok(box.width>=64&&box.height>=64,'o botão tem de ser grande');
-  const [r,g,b]=(await plus.evaluate(el=>getComputedStyle(el).backgroundColor)).match(/\d+/g).map(Number);
-  assert.ok(g>r*1.5&&g>b*1.5,'o botão tem de ser verde: rgb('+[r,g,b]+')');
 
   // Formulário rápido: dois ecrãs, sem o questionário.
   await plus.click();
   assert.equal(await p.locator('#quizForm').count(),0);
   await p.getByText('1 Artigos').waitFor();
+  if(process.argv.includes('--update-images'))await p.locator('#dialog').screenshot({path:require('node:path').resolve(__dirname,'../docs/postos/artigos.png')});
   await click('Robalo');
-  await click('À peça');
+  assert.equal(await button('À peça').getAttribute('aria-pressed'),'true');
   await p.getByLabel('Número de peixes').fill('4');
   await p.getByLabel('Peso aproximado por peixe (kg)').fill('1');
   // Um artigo ainda em edição também tem de sobreviver ao reload.
   await p.reload();await plus.click();
   assert.equal(await p.getByLabel('Número de peixes').inputValue(),'4');
   await click('Adicionar à encomenda');
-  await click('Marisco fresco');
-  await p.getByLabel('Produto',{exact:true}).fill('Gamba da costa');
+  await click('Gamba da costa');
   await p.getByLabel('Quantidade (kg)').fill('2');
-  await click('Adicionar à encomenda');
   await click('Continuar');
   await p.getByLabel('Nome do cliente ou restaurante').fill('TESTE RAPIDA');
   await p.getByLabel('Dia',{exact:true}).fill(today);
@@ -86,8 +82,8 @@ module.exports=async function testQuick(browser,url,base){
 
   // Segunda encomenda, de entrega, com telemóvel estrangeiro e uma barca.
   await plus.click();
+  await p.getByText('Todos os artigos',{exact:true}).click();
   await click('Barcas');
-  await click('Adicionar à encomenda');
   await click('Continuar');
   await p.getByLabel('Nome do cliente ou restaurante').fill('TESTE ENTREGA');
   await p.getByLabel('Modalidade').selectOption('Entrega');
@@ -106,8 +102,8 @@ module.exports=async function testQuick(browser,url,base){
 
   // O separador Cliente continua a abrir o questionário de 6 passos.
   await p.goto(url+'/#cliente');
-  await p.getByLabel('Número de pessoas',{exact:true}).waitFor();
+  await p.getByRole('slider').waitFor();
   assert.equal(await p.locator('#quizForm').count(),1);
-  console.log('PASS: Nova encomenda da equipa: botão «+» verde, formulário rápido, formato antigo da RPC, entrega e telemóvel estrangeiro');
+  console.log('PASS: Nova encomenda em Peixe-Marisco, artigos habituais, catálogo, rascunho, entrega e telemóvel estrangeiro');
  }finally{await context.close();}
 };
