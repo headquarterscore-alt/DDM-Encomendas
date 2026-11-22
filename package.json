@@ -11,8 +11,6 @@
     "playwright": "1.62.1"
   },
   "dependencies": {
-    "@supabase/auth-js": "2.119.2",
-    "@tesseract.js-data/por": "^1.0.0",
-    "tesseract.js": "^6.0.1"
+    "@supabase/auth-js": "2.119.2"
   }
 }

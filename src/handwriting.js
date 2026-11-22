@@ -1,35 +1,76 @@
-import {createWorker, PSM} from 'tesseract.js';
+const pngPrefix = "data:image/png;base64,";
+const namePrefix = "ddm-ink:";
 
-export function openPad(host, field){
- host.innerHTML='<canvas width="900" height="210" aria-label="Escreva o nome à mão"></canvas><small>Escreva em maiúsculas, com as letras separadas.</small><div><button type="button" class="btn">Limpar</button> <button type="button" class="btn">Ler nome</button></div><span role="status"></span>';
- const canvas=host.querySelector('canvas'),ctx=canvas.getContext('2d');
- const [clear,read]=host.querySelectorAll('button'),status=host.querySelector('[role=status]');
- function reset(){ctx.fillStyle='white';ctx.fillRect(0,0,canvas.width,canvas.height);read.disabled=true;}
- reset();clear.onclick=reset;
- function point(e){
-  const box=canvas.getBoundingClientRect();
-  return [(e.clientX-box.left)*canvas.width/box.width,(e.clientY-box.top)*canvas.height/box.height];
+export function decodeNameDrawing(value) {
+ if(typeof value !== "string" || !value.startsWith(namePrefix) || value.length > 120000) return "";
+ const png = value.slice(namePrefix.length);
+ return /^iVBORw0KGgo[A-Za-z0-9+/]+={0,2}$/.test(png) ? pngPrefix + png : "";
+}
+
+export function encodeNameDrawing(png) {
+ return namePrefix + png.slice(pngPrefix.length);
+}
+
+export function openPad(host, drawing, onChange) {
+ const canvas = host.querySelector("canvas");
+ const clear = host.querySelector("button");
+ const context = canvas.getContext("2d");
+ const brushRadius = 2.5;
+ let activePointer = null;
+ let previous;
+ let loading = Boolean(drawing);
+ clear.disabled = true;
+ context.fillStyle = context.strokeStyle = "#102d3d";
+ context.lineWidth = brushRadius * 2;
+ context.lineCap = "round";
+ context.lineJoin = "round";
+
+ if(drawing) {
+  const saved = new Image();
+  saved.onload = () => {
+   context.drawImage(saved, 0, 0, canvas.width, canvas.height);
+   loading = false;
+   clear.disabled = false;
+  };
+  saved.onerror = () => { loading = false; clear.disabled = false; };
+  saved.src = drawing;
  }
- canvas.onpointerdown=e=>{
-  if(!e.isPrimary||clear.disabled)return;
-  canvas.setPointerCapture(e.pointerId);ctx.lineWidth=5;ctx.lineCap='round';ctx.lineJoin='round';
-  ctx.beginPath();ctx.moveTo(...point(e));read.disabled=false;
+ clear.onclick = () => {
+  context.clearRect(0, 0, canvas.width, canvas.height);
+  clear.disabled = true;
+  onChange("");
  };
- canvas.onpointermove=e=>{if(canvas.hasPointerCapture(e.pointerId)){ctx.lineTo(...point(e));ctx.stroke();}};
- read.onclick=async()=>{
-  clear.disabled=read.disabled=true;status.textContent='A ler o nome…';
-  const original=field.value;
-  let worker;
-  try{
-   const path=new URL('./ocr/',document.baseURI).href;
-   worker=await createWorker('por',1,{workerPath:path+'worker.min.js',corePath:path+'core.wasm.js',langPath:path});
-   await worker.setParameters({tessedit_pageseg_mode:PSM.SINGLE_LINE});
-   const {data}=await worker.recognize(canvas);
-   if(!field.isConnected||field.value!==original)return;
-   const name=data.text.trim().replace(/\s+/g,' ').slice(0,80);
-   if(name&&data.confidence>=65){field.value=name;field.dispatchEvent(new Event('input',{bubbles:true}));status.textContent='Confirme o nome acima.';}
-   else status.textContent='A leitura ficou incerta. Tente com letras separadas ou use o teclado.';
-  }catch{status.textContent='Não foi possível ler. Pode escrever o nome com o teclado.';}
-  finally{clear.disabled=read.disabled=false;if(worker)await worker.terminate();}
+ function point(event) {
+  const box = canvas.getBoundingClientRect();
+  return [
+   (event.clientX - box.left) * canvas.width / box.width,
+   (event.clientY - box.top) * canvas.height / box.height
+  ];
+ }
+ canvas.onpointerdown = event => {
+  if(loading || activePointer !== null || !event.isPrimary || event.button !== 0) return;
+  activePointer = event.pointerId;
+  canvas.setPointerCapture(activePointer);
+  previous = point(event);
+  context.beginPath();
+  context.arc(...previous, brushRadius, 0, 2 * Math.PI);
+  context.fill();
+  clear.disabled = true;
  };
+ canvas.onpointermove = event => {
+  if(event.pointerId !== activePointer) return;
+  const next = point(event);
+  context.beginPath();
+  context.moveTo(...previous);
+  context.lineTo(...next);
+  context.stroke();
+  previous = next;
+ };
+ function finish(event) {
+  if(event.pointerId !== activePointer) return;
+  activePointer = null;
+  clear.disabled = false;
+  onChange(canvas.toDataURL("image/png"));
+ }
+ canvas.onpointerup = canvas.onpointercancel = canvas.onlostpointercapture = finish;
 }

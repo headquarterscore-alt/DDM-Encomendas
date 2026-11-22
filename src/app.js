@@ -1,4 +1,5 @@
 import {teamAuth} from './team-auth.js';
+import {decodeNameDrawing,encodeNameDrawing,openPad} from './handwriting.js';
 const stations = {bancada:"Peixe-Marisco",barcas:"Barcas"};
 const states = ["Por preparar","Por preparar","Prontas"];
 const preparationStates=[0,2];
@@ -35,6 +36,7 @@ function lineDescription(i){
 }
 
 const paths={
+ warning:'<path d="M12 3 2 21h20L12 3Zm0 7v4m0 3h.01"/>',
  undo:'<path d="M9 5 4 10l5 5m-5-5h10a5 5 0 0 1 0 10h-3"/>',
  columns:'<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16m6-16v16"/>',
  list:'<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 8h6m-6 4h6m-6 4h4"/>',
@@ -60,6 +62,10 @@ document.querySelectorAll("[data-icon]").forEach(el=>el.replaceWith(new DOMParse
 
 const $=s=>document.querySelector(s);
 const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[c]);
+function displayName(name){
+ const drawing=decodeNameDrawing(name);
+ return drawing?`<img class="name-drawing" src="${drawing}" alt="Nome manuscrito">`:esc(name);
+}
 const cls=["wait","work","ready"];
 const categoryIcons=["boat","fish","waves","pot","snow"];
 const dayNow=()=>lisbonDay();
@@ -227,9 +233,16 @@ function toolbar(total){
  return `<div class="queuehead"><div class="queue-title"><h2>${queue?"Fila de preparação":"Histórico"}</h2><span class="total">${total}</span></div><div class="tools">${datePicker()}</div></div>${queue?`<div class="queue-filters" role="group" aria-label="Estado da preparação">${filters}</div>`:""}`;
 }
 const handoffLabel=o=>o.delivery==="Entrega"?"Confirmar entrega":"Confirmar levantamento";
+function avoidNote(o){
+ return o.avoid.length?`<p class="avoid-note"><strong>Marisco a evitar</strong> · ${esc(o.avoid.join(", "))}</p>`:"";
+}
+function boatContact(o){
+ if(!o.phone)return "";
+ return `<span class="boat-contact" data-contact-order="${o.id}"><strong class="boat-late" hidden>${icon("warning",15)} Atrasada</strong><a href="tel:${esc(o.phone)}">Ligar ao cliente</a></span>`;
+}
 function contactActions(o){
  const dial=o.phone?`<a class="btn" href="tel:${esc(o.phone)}">Ligar</a>`:"";
- return `${o.avoid.length?`<p class="avoid-note"><strong>Marisco a evitar</strong> · ${esc(o.avoid.join(", "))}</p>`:""}
+ return `${avoidNote(o)}
  <div class="contact-actions" data-contact-order="${o.id}"><strong hidden>Atrasada</strong>${dial}</div>`;
 }
 function refreshDeadlines(){
@@ -239,17 +252,17 @@ function refreshDeadlines(){
   const o=findOrder(el.dataset.contactOrder);
   const late=o&&!o.handed&&!o.cancelled&&(o.day<today||(o.day===today&&o.time<hour));
   el.classList.toggle("late",Boolean(late));el.querySelector("strong").hidden=!late;
-  const a=el.querySelector("a");if(a)a.textContent=late?"Ligar ao cliente":"Ligar";
+  const a=el.querySelector("a");if(a&&!el.classList.contains("boat-contact"))a.textContent=late?"Ligar ao cliente":"Ligar";
  });
 }
 function orderCard(o,n){
  const lines=o.items.filter(i=>group(i)===station);
  const other=station==="barcas"?"bancada":"barcas";
- return `<article class="ticket ${cls[n]} ${station}-ticket" data-order="${o.id}" aria-label="${esc(code(o.id)+" · "+o.name)}"><div class="ticket-top">${station==="barcas"?"":`<button class="ref" data-detail="${o.id}" aria-label="Abrir ${esc(code(o.id))}">${esc(code(o.id))}</button>`}${o.priority?`<span class="priority">${icon("flag",13)}Prioritária</span>`:""}${o.tasks[other]!==undefined?`<span class="mixed">Dois postos</span>`:""}</div>
- <button class="ticket-customer" data-detail="${o.id}"><strong>${esc(o.name)}</strong></button>
+ return `<article class="ticket ${cls[n]} ${station}-ticket" data-order="${o.id}" aria-label="${esc(code(o.id)+" · "+(decodeNameDrawing(o.name)?"Nome manuscrito":o.name))}"><div class="ticket-top">${station==="barcas"?"":`<button class="ref" data-detail="${o.id}" aria-label="Abrir ${esc(code(o.id))}">${esc(code(o.id))}</button>`}${o.priority?`<span class="priority">${icon("flag",13)}Prioritária</span>`:""}${o.tasks[other]!==undefined?`<span class="mixed">Dois postos</span>`:""}</div>
+ <button class="ticket-customer" data-detail="${o.id}"><strong>${displayName(o.name)}</strong></button>
  <div class="ticket-deadline"><strong>${esc(o.time)}</strong><span>${icon(modeIcon(o),18)}${esc(o.delivery)}</span></div>
- <div class="ticket-products">${lines.map(i=>station==="barcas"?`<div class="boat-line"><strong>${fmtQty(i.budget)} €</strong><h4>${esc(label(i))}${i.qty>1?` × ${fmtQty(i.qty)}`:""}</h4>${i.people?`<small>${partyLabel(i.people)}</small>`:""}${i.note?`<p class="product-note">${esc(i.note)}</p>`:""}</div>`:`<div class="ticket-product"><div class="product-heading"><h4>${esc(label(i))}</h4><strong class="product-quantity">${fmtQty(i.qty)} <span>${esc(unit(i))}</span></strong></div><p class="product-cut">Corte: <strong>${esc(i.cut||"Não indicado")}</strong></p>${i.note?`<p class="product-note">${esc(i.note)}</p>`:""}</div>`).join("")}</div>
- ${contactActions(o)}
+ <div class="ticket-products">${lines.map((i,index)=>station==="barcas"?`<div class="boat-line"><strong>${fmtQty(i.budget)} €</strong><div class="boat-title"><h4>${esc(label(i))}${i.qty>1?` × ${fmtQty(i.qty)}`:""}</h4>${index===0?boatContact(o):""}</div>${i.people?`<small>${partyLabel(i.people)}</small>`:""}${i.note?`<p class="product-note">${esc(i.note)}</p>`:""}</div>`:`<div class="ticket-product"><div class="product-heading"><h4>${esc(label(i))}</h4><strong class="product-quantity">${fmtQty(i.qty)} <span>${esc(unit(i))}</span></strong></div><p class="product-cut">Corte: <strong>${esc(i.cut||"Não indicado")}</strong></p>${i.note?`<p class="product-note">${esc(i.note)}</p>`:""}</div>`).join("")}</div>
+ ${station==="barcas"?avoidNote(o):contactActions(o)}
  ${o.note?`<p class="ticket-note">${esc(o.note)}</p>`:""}
  ${n<2?`<button class="ticket-action primary" data-advance="${o.id}">Pronta</button>`:""}
  ${n===2?`<div class="ticket-completion"><p class="completion">${icon("check",18)} ${o.handed?"Entregue":station==="barcas"?"Barcas concluídas":"Preparação concluída"}</p>${canUndo(o)&&(!undoAction.target||undoAction.target===station)?`<button type="button" class="btn card-undo" data-quick-undo="${o.id}">${icon("undo",21)} Desfazer</button>`:""}</div>
@@ -277,7 +290,7 @@ function boardContent(){
 function listContent(){
  const stateKey=o=>o.cancelled?"cancelada":o.handed?"entregue":statusKeys[globalState(o)];
  const items=orders.filter(o=>listState==="all"||listState===stateKey(o)).sort(byTime);
- return `<div class="list-tabs">${[["all","Todas"],...preparationStates.map(n=>[statusKeys[n],states[n]]),["entregue","Entregues"],["cancelada","Canceladas"]].map(([key,t])=>`<button data-list="${key}" aria-pressed="${key===listState}" class="${key===listState?"active":""}">${t}</button>`).join("")}</div><div class="order-table"><div class="table-row table-head"><span>Encomenda</span><span>Cliente</span><span>Hora prevista</span><span>Postos</span><span>Estado</span></div>${items.map(o=>`<button data-detail="${o.id}" class="table-row"><strong>${code(o.id)}</strong><span>${esc(o.name)}</span><span>${esc(o.time)}<small>${esc(o.delivery)}</small></span><span>${Object.keys(o.tasks).map(k=>stations[k]).join(" + ")}</span><span>${o.cancelled?"Cancelada":o.handed?`<span class="delivered">${icon("check",14)} Entregue</span>`:statusPill(globalState(o))}</span></button>`).join("")||empty("Sem encomendas para estes critérios.")}</div>`;
+ return `<div class="list-tabs">${[["all","Todas"],...preparationStates.map(n=>[statusKeys[n],states[n]]),["entregue","Entregues"],["cancelada","Canceladas"]].map(([key,t])=>`<button data-list="${key}" aria-pressed="${key===listState}" class="${key===listState?"active":""}">${t}</button>`).join("")}</div><div class="order-table"><div class="table-row table-head"><span>Encomenda</span><span>Cliente</span><span>Hora prevista</span><span>Postos</span><span>Estado</span></div>${items.map(o=>`<button data-detail="${o.id}" class="table-row"><strong>${code(o.id)}</strong><span>${displayName(o.name)}</span><span>${esc(o.time)}<small>${esc(o.delivery)}</small></span><span>${Object.keys(o.tasks).map(k=>stations[k]).join(" + ")}</span><span>${o.cancelled?"Cancelada":o.handed?`<span class="delivered">${icon("check",14)} Entregue</span>`:statusPill(globalState(o))}</span></button>`).join("")||empty("Sem encomendas para estes critérios.")}</div>`;
 }
 function clientContent(){return `<section class="client-intro"><div><h2>Faça a sua encomenda</h2><p>Escolha uma barca, peixe ou marisco para levantar na loja ou receber por entrega.</p>${button("bag","Começar encomenda","new","primary")}</div></section>`;}
 function render(){
@@ -336,7 +349,7 @@ function confirmHistory(o,action){
  confirmOrder=o;openDialog("confirm");
  const cancel=action==="cancel";
  panel.innerHTML=modalHead(esc(code(o.id)),cancel?"Cancelar encomenda":undoLabel(o))+`<form class="modal-body" id="historyConfirm" data-action="${action}">
- <p>${esc(o.name)} · ${esc(o.time)}</p>
+ <p>${displayName(o.name)} · ${esc(o.time)}</p>
  ${cancel?`<label class="field"><span id="reasonLabel">Motivo</span><select id="cancelReason" aria-labelledby="reasonLabel" required><option value="">Escolher motivo</option><option>Pedido do cliente</option><option>Artigo indisponível</option><option>Encomenda duplicada</option><option>Outro</option></select></label><label class="field" id="otherReason" hidden>Qual é o motivo?<input maxlength="200"></label>`:"<p>A encomenda voltará à fila de prontas.</p>"}
  <div class="history-actions"><button type="button" class="btn" data-detail="${o.id}">Voltar</button><button type="submit" class="btn primary">${cancel?"Confirmar cancelamento":"Confirmar"}</button></div></form>`;
  renderSync();
@@ -352,9 +365,9 @@ function drawDetail(){
  const o=findOrder(detailId);if(!o)return;
  const pos=dialog.scrollTop;
  const state=o.cancelled?"Cancelada":o.handed?"Entregue":globalState(o)===2?"Pronta para entrega":"Por preparar";
- panel.innerHTML=modalHead(`${code(o.id)} · ${esc(o.channel)}`,esc(o.name))+`<div class="modal-body"><div class="detail-info"><span>${icon("calendar",16)}${dateText(o.day,{day:"numeric",month:"short"})} · ${esc(o.time)}</span><span>${icon(modeIcon(o),16)}${esc(o.delivery)}</span><span>${icon("user",16)}${typeName(o)}</span></div>
+ panel.innerHTML=modalHead(`${code(o.id)} · ${esc(o.channel)}`,displayName(o.name))+`<div class="modal-body"><div class="detail-info"><span>${icon("calendar",16)}${dateText(o.day,{day:"numeric",month:"short"})} · ${esc(o.time)}</span><span>${icon(modeIcon(o),16)}${esc(o.delivery)}</span><span>${icon("user",16)}${typeName(o)}</span></div>
  ${o.address?`<p class="detail-contact">${esc(o.address)}</p>`:""}${o.note?`<div class="note">${icon("note",17)}<div><strong>Notas de preparação</strong><p>${esc(o.note)}</p></div></div>`:""}
- ${contactActions(o)}
+ ${o.tasks.barcas!==undefined?avoidNote(o)+boatContact(o):contactActions(o)}
  ${o.party?`<p>${esc(o.party)} pessoas · ${esc(occasions[o.occasion]||"")} ${esc(o.occasionOther||"")}</p>`:""}
  ${o.liked.length?`<p>Marisco preferido: ${esc(o.liked.join(", "))}</p>`:""}
  ${Object.keys(o.tasks).sort((a,b)=>a===station?-1:b===station?1:0).map(s=>`<section class="task">${workControls(o,s)}</section>`).join("")}
@@ -416,12 +429,12 @@ function boatForBudget(budget){
 }
 function budgetForBoat(id,value){
  const [min,max]=boatBudgets[id];
- return Math.min(id==="bg"?max:max-1,Math.max(min,value));
+ return Math.min(id==="bg"?max:max-10,Math.max(min,value));
 }
 function allItems(){
  const suggested=Math.max(boatBudgets.bp[0],Number(draft.party)*20);
  const initial=Object.hasOwn(boatBudgets,draft.boatChoice)?budgetForBoat(draft.boatChoice,suggested):suggested;
- const budget=Math.min(boatBudgets.bg[1],Math.max(boatBudgets.bp[0],Number(draft.adjustedBudget??initial)));
+ const budget=Math.min(boatBudgets.bg[1],Math.max(0,Math.round(Number(draft.adjustedBudget??initial)/10)*10));
  const size=boatForBudget(budget);
  return [{product:size,qty:1,people:Number(draft.party)||null,budget,use:draft.occasion==="petisco"?"Petisco":"Refeição",note:""},...draft.items];
 }
@@ -439,7 +452,7 @@ function shellfish(group,title){
 }
 function articleStep(){
  const {product:selected,budget}=allItems()[0];
- const min=boatBudgets.bp[0],max=boatBudgets.bg[1];
+ const max=boatBudgets.bg[1],minimumOrder=boatBudgets.bp[0];
  const photos={bp:"barca_pequena.png",bm:"barca_media.png",bg:"barca_grande.png"};
  const cards=Object.keys(capacities).map(id=>`
   <button type="button" data-pick="boatChoice" data-value="${id}" aria-pressed="${selected===id}">
@@ -449,13 +462,15 @@ function articleStep(){
  return `<div class="budget-title"><span>Valor da barca</span><output for="boatBudget">${fmtQty(budget)} €</output></div>
  <div class="boat-options">${cards}</div>
  <label class="boat-budget">
- <input id="boatBudget" type="range" data-field="o.adjustedBudget" aria-label="Ajustar valor da barca" aria-valuetext="${fmtQty(budget)} € · ${product(selected).name}" min="${min}" max="${max}" step="1" value="${budget}">
- <small><span>${min} €</span><span>${max} €</span></small></label>`;
+ <input id="boatBudget" type="range" data-field="o.adjustedBudget" aria-label="Ajustar valor da barca" aria-valuetext="${fmtQty(budget)} € · ${product(selected).name}" min="0" max="${max}" step="10" value="${budget}">
+ <small><span>0 €</span><span>${max} €</span></small></label>
+ <p class="budget-minimum" ${budget<minimumOrder?"":"hidden"}>O valor mínimo para encomendar é ${minimumOrder} €.</p>`;
 }
 function contactStep(){
  return ` <div class="form-grid">${input("Dia","day",draft.day,`type="date" min="${dayNow()}" max="${shiftDay(dayNow(),365)}" required`)}${input("Hora","time",draft.time,'type="time" required')}</div>
- ${input("Nome do cliente ou restaurante","name",draft.name,'required maxlength="80" autocomplete="name"')}
- <button type="button" class="btn" data-show-ink>Escrever à mão</button><div data-ink></div>
+ <fieldset class="name-pad" data-ink><legend>Nome para a barca</legend>
+ <canvas width="600" height="150" aria-label="Área para desenhar o nome da barca"></canvas>
+ <button type="button" class="btn">Limpar desenho</button></fieldset>
  
  ${input("Telemóvel (opcional)","phone",draft.phone,'type="tel" inputmode="tel" maxlength="40" placeholder="Número português ou +indicativo e número"')}
 
@@ -469,7 +484,7 @@ function review(){
  return `<div class="boat-summary"><strong>${esc(label(allItems()[0]))} · ${fmtQty(allItems()[0].budget)} €</strong><span>${esc(description)}</span></div>${draft.items.map(i=>`<p><strong>${esc(label(i))}${product(i.product).cat===0?" × "+fmtQty(i.qty):""}</strong> · ${esc(lineDescription(i))}</p>`).join("")}
  <p>Marisco preferido: ${esc(preferences(draft,"liked").join(", ")||"À maneira da casa")}</p>${preferences(draft,"avoid").length?`<p>Marisco a evitar · ${esc(preferences(draft,"avoid").join(", "))}</p>`:""}
  <p class="review-pickup">${esc(draft.delivery)} · ${esc(draft.day)} às ${esc(draft.time)}${draft.delivery==="Entrega"?" · "+esc(draft.address):""}</p>
- <p>${esc([draft.name,draft.phone].filter(Boolean).join(" · "))}</p>${draft.note?`<p>${esc(draft.note)}</p>`:""}${draft.priority?"<p>Encomenda prioritária</p>":""}`;
+ <div class="review-name">${displayName(draft.name)}${draft.phone?`<p>${esc(draft.phone)}</p>`:""}</div>${draft.note?`<p>${esc(draft.note)}</p>`:""}${draft.priority?"<p>Encomenda prioritária</p>":""}`;
 }
 function drawForm(){
  const pages=[partyStep,
@@ -481,6 +496,11 @@ function drawForm(){
  <progress value="${draftStep}" max="6" aria-label="Progresso"></progress>${pages[draftStep-1]()}
  <p id="quizError" role="alert">${esc(hadFormError)}</p><div class="form-foot">${draftStep>1?`<button type="button" class="btn" data-quiz-back ${busy?"disabled":""}>Voltar</button>`:""}
  <button class="btn primary" type="submit" ${busy?"disabled":""}>${busy?"A registar…":draftStep===6?"Confirmar encomenda":"Continuar"}</button></div></form>`;
+ const pad=panel.querySelector("[data-ink]");
+ if(pad)openPad(pad,decodeNameDrawing(draft.name),drawing=>{
+  draft.name=drawing?encodeNameDrawing(drawing):"";
+  persistDraft();
+ });
  persistDraft();
 }
 function quizSection(key,title,content,initiallyOpen=false){
@@ -502,10 +522,11 @@ function quizError(){
    if(items.some(s=>Array.from(s).length>60))return "Cada item de marisco pode ter até 60 caracteres.";
   }
  }
- if(draftStep===4&&!allItems().length)return "Adicione pelo menos um artigo para continuar.";
+ if([4,6].includes(draftStep)&&allItems()[0].budget<boatBudgets.bp[0])return "Escolha um valor de pelo menos 50 € para encomendar.";
  if(draftStep===5){
   if(draft.phone.trim()&&!normalizedPhone(draft.phone))return "Indique 9 dígitos para Portugal ou + seguido do indicativo e do número (8 a 15 dígitos).";
-  if(!draft.name.trim()||(draft.delivery==="Entrega"&&!draft.address.trim()))return "Preencha os campos obrigatórios.";
+  if(!decodeNameDrawing(draft.name))return "Desenhe o nome da barca para continuar.";
+  if(draft.delivery==="Entrega"&&!draft.address.trim())return "Preencha a morada da entrega.";
  }
  return "";
 }
@@ -651,6 +672,8 @@ document.addEventListener("input",e=>{
   const amount=fmtQty(t.value)+" €";
   const selected=boatForBudget(Number(t.value));
   panel.querySelector(".budget-title output").textContent=amount;
+  panel.querySelector(".budget-minimum").hidden=Number(t.value)>=boatBudgets.bp[0];
+  $("#quizError").textContent="";
   t.setAttribute("aria-valuetext",amount+" · "+product(selected).name);
   panel.querySelectorAll(".boat-options button").forEach(card=>card.setAttribute("aria-pressed",card.dataset.value===selected));
  }
@@ -659,15 +682,6 @@ document.addEventListener("input",e=>{
   t.closest("fieldset").querySelector('[data-value="none"]').setAttribute("aria-pressed",!preferences(draft,key).length);
  }
  persistDraft();
-});
-document.addEventListener("click",async event=>{
- const button=event.target.closest("[data-show-ink]");
- if(!button)return;
- const field=panel.querySelector('#quizForm [data-field="o.name"]');
- const host=panel.querySelector("[data-ink]");
- if(!host||host.childElementCount)return;
- try{const {openPad}=await import(new URL("./handwriting.js",document.baseURI).href);if(host.isConnected&&!host.childElementCount){openPad(host,field);button.hidden=true;}}
- catch{notice("Escrita à mão indisponível. Pode escrever o nome com o teclado.");}
 });
 document.addEventListener("change",e=>{
  const t=e.target;

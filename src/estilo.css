@@ -86,7 +86,7 @@ nav [data-nav],.ticket .ref,.ticket-customer,.task-btns .btn,.global .btn,.list-
 .list-tabs,.history-actions {display:flex;flex-wrap:wrap;gap:8px}
 .history-actions {margin-top:16px}
 .history-actions .btn,#historyConfirm select,#historyConfirm input {min-height:56px}
-#otherReason[hidden],[data-show-ink][hidden] {display:none}
+#otherReason[hidden] {display:none}
 .ticket-completion{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
 .ticket .card-undo{min-height:56px;color:#a22e22;background:#fff2ee;border:1px solid #dfaaa2}
 
@@ -139,7 +139,16 @@ nav [data-nav],.ticket .ref,.ticket-customer,.task-btns .btn,.global .btn,.list-
 @media(min-width:1200px){.lane-body{grid-template-columns:repeat(4,minmax(0,1fr))}}
 @media(max-width:690px){.lane-body{grid-template-columns:minmax(0,1fr)}}
 .barcas-ticket{display:flex;flex-direction:column}.barcas-ticket .ticket-products{order:-3;margin:0}.boat-line{display:grid;grid-template-columns:auto 1fr;align-items:baseline;gap:3px 12px}.boat-line>strong{font-size:32px}.boat-line h4{font-size:22px;margin:0}.boat-line small,.boat-line .product-note{grid-column:2}.barcas-ticket .ticket-deadline{order:-2;margin:6px 0;padding:5px 0;background:transparent;justify-content:flex-start;gap:8px}.barcas-ticket .ticket-deadline strong{font-size:22px}.barcas-ticket .ticket-top:empty{display:none}.barcas-ticket .ticket-customer strong{font-size:18px}.barcas-ticket .ticket-customer{min-height:44px}.party-slider{display:grid;gap:12px}.party-slider output{font-size:36px;font-weight:750}.party-slider input{width:100%;height:56px;accent-color:var(--navy)}.boat-options{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.boat-options button{display:grid;place-items:center;align-content:center;gap:8px;min-height:140px;padding:8px;border:2px solid var(--line);border-radius:12px}.boat-options .suggested{box-shadow:0 0 12px #ec9b3190}.boat-options [aria-pressed=true]{border-color:var(--navy);background:#eaf2f6}.boat-options strong{font-size:22px}
-[data-ink] canvas{display:block;width:100%;height:110px;touch-action:none;border:2px solid var(--line);border-radius:8px}[data-ink]:not(:empty){display:grid;gap:8px;margin-bottom:16px}
+.name-pad canvas{display:block;width:100%;aspect-ratio:4 / 1;touch-action:none;background:#fff;border:2px solid var(--line);border-radius:8px}
+.name-pad button{margin-top:8px}
+.name-drawing{display:block;width:min(100%,270px);height:auto;object-fit:contain}
+.table-row .name-drawing{max-height:50px}
+.budget-minimum{margin-top:8px;color:#a22e22}
+.boat-title{display:flex;flex-wrap:wrap;align-items:start;gap:4px 14px;min-width:0}
+.boat-contact{display:grid;justify-items:start;align-content:start;flex:none}
+.boat-late{display:flex;align-items:center;gap:5px;color:#9c381d;font-size:13px;white-space:nowrap}
+.boat-late[hidden]{display:none}
+.boat-contact a{display:inline-flex;align-items:center;min-height:44px;color:var(--navy);font-weight:650;font-size:13px;text-decoration:underline;text-underline-offset:3px}
 .boat-options button{align-content:center;text-align:center;transition:background-color .16s,border-color .16s,box-shadow .16s}
 .boat-options button[aria-pressed=true]{box-shadow:0 0 14px #ec9b31aa}
 .boat-options img{
@@ -152,4 +161,3 @@ nav [data-nav],.ticket .ref,.ticket-customer,.task-btns .btn,.global .btn,.list-
 .boat-budget input{grid-column:1/-1;width:100%;height:56px;margin:0;accent-color:var(--navy);cursor:pointer}
 .boat-budget small{grid-column:1/-1;display:flex;justify-content:space-between;color:var(--muted)}
 @media(prefers-reduced-motion:reduce){.boat-options button{transition:none}}
-[data-show-ink]{margin-bottom:12px}
