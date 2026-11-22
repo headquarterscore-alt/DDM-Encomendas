@@ -24,7 +24,8 @@ module.exports=async function testQuick(browser,url,base){
   await p.goto(url+'/#encomendas/bancada');
   const plus=button('Nova encomenda');
   await plus.waitFor();
-  assert.equal((await plus.innerText()).trim(),'Nova encomenda');
+  assert.equal((await plus.innerText()).trim(),'');
+  assert.equal(await plus.locator('svg').count(),1);
   const box=await plus.boundingBox();
   assert.ok(box.width>=64&&box.height>=64,'o botão tem de ser grande');
 

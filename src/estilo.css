@@ -116,7 +116,9 @@ nav [data-nav],.ticket .ref,.ticket-customer,.task-btns .btn,.global .btn,.list-
 #loginPanel input,#loginPanel button,#signOut {min-height:56px}
 #loginPanel button {width:100%;justify-content:center}
 .session-locked #main,.session-locked nav,.session-locked #networkStatus,.session-locked #dialog,.session-locked #writeStatus,.session-locked #toast,#signOut[hidden],#loginPanel[hidden] {display:none}
-.station-header .btn.primary.new-order{min-height:64px;padding:12px 18px;background:var(--navy);border-color:var(--navy);font-size:18px;gap:10px}
+.station-header .btn.primary.new-order{width:72px;height:72px;padding:0;justify-content:center;background:#168545;border-color:#168545;color:white;border-radius:16px}
+.station-header .btn.new-order .ico{width:36px;height:36px;stroke-width:3}
+.focus .pagehead.station-header{min-height:0;margin-bottom:12px}
 .party-options{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-bottom:20px}
 .party-options button{display:grid;place-content:center;gap:2px;min-height:76px;border:1px solid var(--line);border-radius:8px;background:#f4f7f8;color:var(--ink)}
 .party-options button strong{font-size:28px;line-height:1.1}.party-options button span{font-size:15px}
@@ -128,7 +130,7 @@ nav [data-nav],.ticket .ref,.ticket-customer,.task-btns .btn,.global .btn,.list-
 #qItemForm .field input,#qItemForm .field select,#qItemForm .btn,#qOrderForm .btn{min-height:56px}
 .item-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}
 .item-actions .btn{flex:1 1 10rem;justify-content:center}
-@media(max-width:690px){.station-header .btn.primary.new-order{min-height:56px;font-size:16px;padding:10px 12px}}
+@media(max-width:690px){.station-header .btn.primary.new-order{width:64px;height:64px}}
 
 /* Filas de preparação: quatro cartões por linha nos ecrãs maiores. */
 .board{grid-template-columns:minmax(0,1fr);overflow-x:visible}

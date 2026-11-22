@@ -85,8 +85,8 @@ async function until(fn,message){for(let i=0;i<100;i++){if(await fn())return;awa
    assert.deepEqual(await p.locator('[data-nav]').allTextContents(),['Encomendas','Histórico','Cliente']);
    assert.ok(await p.locator('nav').isVisible(),'navigation remains available in station mode');
    assert.equal(await p.getByText('Modo demo',{exact:true}).count(),0);
-   assert.match(await p.locator('[data-station]').first().innerText(),/POSTO 01[\s\S]*Peixe-Marisco/);
-   assert.match(await p.locator('[data-station]').last().innerText(),/POSTO 02[\s\S]*Barcas/);
+   assert.equal(await p.locator('[data-station]').count(),0);
+   assert.equal(await p.locator('.station-header h1').count(),0);
    const expected=await p.evaluate(()=>new Intl.DateTimeFormat('pt-PT',{timeZone:'Europe/Lisbon',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).format(new Date()));
    assert.equal(await p.locator('[data-clock]').innerText(),expected);
   }
@@ -183,7 +183,8 @@ async function until(fn,message){for(let i=0;i<100;i++){if(await fn())return;awa
   // Reopen root URL in fresh pages; the two contexts retain separate device preferences.
   for(let i=0;i<2;i++){
    await pages[i].close();pages[i]=await contexts[i].newPage();await pages[i].goto(url+'/');
-   await until(async()=>await pages[i].locator('#main h1').innerText()===(i?'Peixe-Marisco':'Barcas'),'device reopened correct station');
+   await pages[i].getByRole('button',{name:'Sair do modo posto',exact:true}).click();
+   assert.equal(await pages[i].locator('#main h1').innerText(),i?'Peixe-Marisco':'Barcas');
    assert.equal(await pages[i].locator('[data-station="'+(i?'bancada':'barcas')+'"]').getAttribute('aria-pressed'),'true');
   }
   for(const p of pages){
