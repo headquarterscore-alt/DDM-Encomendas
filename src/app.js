@@ -211,7 +211,8 @@ function header(){
  const client=page==="cliente",list=page==="historico";
  const title=client?"Cliente":list?"Histórico":stations[station];
  const boat=!list&&station==="barcas";
- return `<div class="pagehead station-header"><h1>${title}</h1><div class="header-date">${icon("calendar",30)}<span data-today></span></div><div class="header-clock" aria-label="Hora atual em Lisboa">${icon("clock",34)}<time data-clock></time></div><div class="head-actions"><span class="sync" role="status"></span>${!client&&!list?`<button class="btn square" title="${focusMode?"Sair do modo posto":"Modo posto em ecrã inteiro"}" aria-label="${focusMode?"Sair do modo posto":"Modo posto em ecrã inteiro"}" data-act="focus">${icon(focusMode?"shrink":"expand",30)}</button>`:""}${client?"":button(boat?"boat":"bag",boat?"Encomendar barca":"Nova encomenda",boat?"boat-order":"new","primary new-order")}</div></div>`;
+ const newOrderLabel=boat?"Encomendar barca":"Nova encomenda";
+ return `<div class="pagehead station-header">${focusMode?"":`<h1>${title}</h1>`}<div class="header-date">${icon("calendar",30)}<span data-today></span></div><div class="header-clock" aria-label="Hora atual em Lisboa">${icon("clock",34)}<time data-clock></time></div><div class="head-actions"><span class="sync" role="status"></span>${!client&&!list?`<button class="btn square" title="${focusMode?"Sair do modo posto":"Modo posto em ecrã inteiro"}" aria-label="${focusMode?"Sair do modo posto":"Modo posto em ecrã inteiro"}" data-act="focus">${icon(focusMode?"shrink":"expand",30)}</button>`:""}${client?"":`<button type="button" class="btn primary new-order" data-act="${boat?"boat-order":"new"}" aria-label="${newOrderLabel}" title="${newOrderLabel}">${icon("plus",36)}</button>`}</div></div>`;
 }
 function updateClock(){
  const now=new Date();
@@ -298,7 +299,7 @@ function render(){
  document.title=(page==="encomendas"?"Encomendas":page==="cliente"?"Cliente":"Histórico")+" · Delicias do Mar";
  document.querySelectorAll("[data-nav]").forEach(a=>{a.classList.toggle("active",a.dataset.nav===page);if(a.dataset.nav===page)a.setAttribute("aria-current","page");else a.removeAttribute("aria-current");});
  const total=page==="encomendas"?orders.filter(o=>!o.cancelled&&!o.handed&&o.tasks[station]!==undefined).length:orders.length;
- main.innerHTML=header()+(page==="cliente"?clientContent():(page==="encomendas"?stationCards():"")+toolbar(total)+`<div id="results">${page==="encomendas"?boardContent():listContent()}</div>`)+`<footer><span>Delicias do Mar <b>·</b> Loulé</span><span>${icon("waves",19)} Central de encomendas</span></footer>`;
+ main.innerHTML=header()+(page==="cliente"?clientContent():(page==="encomendas"&&!focusMode?stationCards():"")+toolbar(total)+`<div id="results">${page==="encomendas"?boardContent():listContent()}</div>`)+`<footer><span>Delicias do Mar <b>·</b> Loulé</span><span>${icon("waves",19)} Central de encomendas</span></footer>`;
  updateClock();renderSync();
 }
 function rerenderResults(){const el=$("#results");if(el)el.innerHTML=page==="encomendas"?boardContent():listContent();renderSync();}
