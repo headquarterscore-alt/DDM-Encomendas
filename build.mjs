@@ -1,3 +1,4 @@
+import { build } from 'esbuild';
 import { createHash } from 'node:crypto';
 import { cpSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { resolve, relative, sep } from 'node:path';
@@ -35,7 +36,11 @@ page = must(page, './marca.png')
 for (const file of ['app.js', 'install.js']) {
   const tag = '<script type="module" src="./' + file + '"></script>';
   must(page, tag);
-  page = page.replace(tag, () => '<script type="module">' + read(file).replace(/<\/script/gi, '<\\/script') + '</script>');
+  const script = file === 'app.js'
+    ? (await build({entryPoints:[resolve(src,file)],bundle:true,platform:'browser',format:'esm',minify:true,write:false})).outputFiles[0].text
+    : read(file);
+  if(file==='app.js') writeFileSync(resolve(dist,file),script);
+  page = page.replace(tag, () => '<script type="module">' + script.replace(/<\/script/gi, '<\\/script') + '</script>');
 }
 hash.update(page);
 const version = 'ddm-postos-' + hash.digest('hex').slice(0, 14);

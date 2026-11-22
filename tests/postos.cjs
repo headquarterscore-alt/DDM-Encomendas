@@ -32,8 +32,13 @@ async function until(fn,message){for(let i=0;i<100;i++){if(await fn())return;awa
  const contexts=await Promise.all([browser.newContext({viewport:{width:1440,height:1100},serviceWorkers:'block'}),browser.newContext({viewport:{width:1440,height:1100},serviceWorkers:'block'})]);
  const errors=[];
  try{
+  if(!live){
+   await require('./auth.cjs').testLogin(browser,url,base);
+   for(const context of contexts)await require('./auth.cjs').prepareSession(context);
+  }
   if(!live)for(const context of contexts)await context.route(base+'/**',async route=>{
    const path=new URL(route.request().url()).pathname;
+   assert.match(route.request().headers().authorization||'',/^Bearer /);
    if(path.endsWith('/rpc/update_task')){
     mutations++;await wait(450);
     if(failNext){failNext=false;return route.fulfill({status:500,json:{message:'Falha simulada ao guardar'}});}
@@ -59,9 +64,15 @@ async function until(fn,message){for(let i=0;i<100;i++){if(await fn())return;awa
   });
   let id=fixture.id;
   if(live){
-   const response=await contexts[0].request.post(base+'/rest/v1/rpc/create_order',{headers:{apikey},data:{payload}});
+   const email=process.env.DDM_TEST_EMAIL,password=process.env.DDM_TEST_PASSWORD;
+   if(!email||!password)throw Error('O teste live requer uma conta de teste fornecida pelo operador.');
+   const login=await contexts[0].request.post(base+'/auth/v1/token?grant_type=password',{headers:{apikey},data:{email,password}});
+   assert.ok(login.ok(),'Falhou a autenticação da conta de teste');
+   const session=await login.json(),headers={apikey,Authorization:'Bearer '+session.access_token};
+   for(const c of contexts)await require('./auth.cjs').prepareSession(c,session);
+   const response=await contexts[0].request.post(base+'/rest/v1/rpc/create_order',{headers,data:{payload}});
    assert.ok(response.ok(),await response.text());const created=await response.json();
-   const row=await contexts[0].request.get(base+'/rest/v1/orders?select=*,station_tasks(*),order_items(*)&id=eq.'+created.id,{headers:{apikey}});
+   const row=await contexts[0].request.get(base+'/rest/v1/orders?select=*,station_tasks(*),order_items(*)&id=eq.'+created.id,{headers});
    const rows=await row.json();id=rows[0].id;console.log('Live fixture:',rows[0].ref,customer);
   }
   const pages=await Promise.all(contexts.map(c=>c.newPage()));const [barcas,bancada]=pages;
@@ -154,7 +165,7 @@ async function until(fn,message){for(let i=0;i<100;i++){if(await fn())return;awa
   // Reopen root URL in fresh pages; the two contexts retain separate device preferences.
   for(let i=0;i<2;i++){
    await pages[i].close();pages[i]=await contexts[i].newPage();await pages[i].goto(url+'/');
-   await until(async()=>await pages[i].locator('h1').innerText()===(i?'Peixe-Marisco':'Barcas'),'device reopened correct station');
+   await until(async()=>await pages[i].locator('#main h1').innerText()===(i?'Peixe-Marisco':'Barcas'),'device reopened correct station');
    assert.equal(await pages[i].locator('[data-station="'+(i?'bancada':'barcas')+'"]').getAttribute('aria-pressed'),'true');
   }
   for(const p of pages){

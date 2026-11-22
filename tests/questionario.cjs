@@ -2,6 +2,7 @@ const assert=require('node:assert/strict');
 
 module.exports=async function testQuestionnaire(browser,url,base){
  const context=await browser.newContext({serviceWorkers:'block',viewport:{width:1024,height:900}});
+ await require("./auth.cjs").prepareSession(context);
  const rows=[],submitted=[],attempts=[];
  await context.route(base+'/**',async route=>{
   const path=new URL(route.request().url());
@@ -76,7 +77,7 @@ module.exports=async function testQuestionnaire(browser,url,base){
    const boats=data.items.filter(i=>i.category==='barcas');
    assert.equal(boats.reduce((n,i)=>n+i.quantity*i.people,0),fishOnly?0:12);
    assert.ok(boats.every(i=>i.meal_type===(idx===2?'petisco':'refeicao')));
-   assert.equal(await p.evaluate(scope=>localStorage.getItem('ddm-questionario-1-'+scope),team?'Equipa':'Cliente'),null);
+   assert.equal(await p.evaluate(scope=>Object.keys(localStorage).find(k=>k.startsWith('ddm-questionario-2-')&&k.endsWith('-'+scope))||null,team?'Equipa':'Cliente'),null);
    await click('Concluir');
   }
   await p.goto(url+'/#encomendas/bancada');

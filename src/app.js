@@ -1,3 +1,4 @@
+import {teamAuth} from './team-auth.js';
 const stations = {bancada:"Peixe-Marisco",barcas:"Barcas"};
 const states = ["Por iniciar","Em preparação","Prontas"];
 const categories = ["Barcas","Peixe fresco","Marisco fresco","Marisco cozido","Congelados"];
@@ -73,8 +74,25 @@ const refs=new Map(), rawOrders=new Map();
 const catKeys=["barcas","peixe_fresco","marisco_fresco","marisco_cozido","congelados"];
 const statusKeys=["por_iniciar","em_preparacao","pronta"];
 const unitKeys={"un.":"un","dz.":"dz","kg":"kg"};
+let teamSession=null,sessionEpoch=0;
+function showSession(next){
+ const previous=teamSession?.user.id;
+ teamSession=next;
+ document.body.classList.toggle("session-locked",!next);
+ $("#loginPanel").hidden=!!next;$("#signOut").hidden=!next;
+ if(previous===next?.user.id)return;
+ sessionEpoch++;serial++;fetchDay=null;orders=[];rawOrders.clear();refs.clear();loaded=false;synced=false;networkProblem=false;
+ drafts.clear();draft=null;detailId=null;saveMessage="";savingId=null;clearUndo();lastSync=0;
+ if(dialog.open)dialog.close();panel.replaceChildren();main.replaceChildren();
+ $("#networkStatus").hidden=true;$("#writeStatus").textContent="";$("#toast").classList.remove("on");
+ if(next)route();
+}
 async function rest(path,payload){
- let r,text;try{r=await fetch(base+"/rest/v1/"+path,{signal:AbortSignal.timeout(8000),method:payload?"POST":"GET",headers:{apikey:publicKey,"Content-Type":"application/json"},body:payload?JSON.stringify(payload):undefined,cache:"no-store"});text=await r.text();}catch{throw Error("Sem ligação à demo. Verifica a ligação à internet e tenta novamente.");}
+ const epoch=sessionEpoch,token=teamSession?.access_token;
+ if(!token)throw Error("Inicia sessão.");
+ let r,text;try{r=await fetch(base+"/rest/v1/"+path,{signal:AbortSignal.timeout(8000),method:payload?"POST":"GET",headers:{apikey:publicKey,Authorization:"Bearer "+token,"Content-Type":"application/json"},body:payload?JSON.stringify(payload):undefined,cache:"no-store"});text=await r.text();}catch{throw Error("Sem ligação à demo. Verifica a ligação à internet e tenta novamente.");}
+ if(epoch!==sessionEpoch)throw Error("Inicia sessão.");
+ if(r.status===401){auth.reject(token);throw Error("Inicia sessão.");}
  let j=null;if(text){try{j=JSON.parse(text);}catch{}}
  if(!r.ok&&path==="rpc/create_order"&&j?.code&&j.code!=="P0001")throw Error("Não foi possível registar a encomenda. Confirme os dados e tente novamente.");
  if(!r.ok)throw Object.assign(Error(j?.message||"O servidor não respondeu como esperado (erro "+r.status+"). Tenta novamente."),{status:r.status});
@@ -128,6 +146,7 @@ async function request(url,data){
  return onlineRequest(url,data);
 }
 function route(){
+ if(!teamSession)return;
  const [raw,param]=location.hash.slice(1).split("/");page=["cliente","historico"].includes(raw)?raw:"encomendas";
  if(page==="encomendas"){
   if(Object.hasOwn(stations,param)){
@@ -149,7 +168,7 @@ function selectStation(s){
 
 let lastSync=0,fetchDay=null,networkProblem=false;
 async function sync(){
- if(busy)return;
+ if(busy||!teamSession)return;
  const selected=day;if(fetchDay===selected)return;fetchDay=selected;
  const current=++serial;
  try{
@@ -161,6 +180,7 @@ async function sync(){
  finally{if(fetchDay===selected)fetchDay=null;renderSync();}
 }
 function renderSync(){
+ if(!teamSession)return;
  refreshDeadlines();
  document.querySelectorAll(".sync").forEach(el=>{el.classList.toggle("off",!synced);el.innerHTML=`<span></span>${synced?"Ligado":networkProblem?"Sem ligação":"A ligar"}`;el.title=lastSync?"Última leitura às "+new Date(lastSync).toLocaleTimeString("pt-PT",{timeZone:"Europe/Lisbon"}):"Ligação à base de dados da equipa";});
  const b=document.getElementById("networkStatus");
@@ -248,6 +268,7 @@ function listContent(){
 }
 function clientContent(){return `<section class="client-intro"><div><h2>Faça a sua encomenda</h2><p>Escolha uma barca, peixe ou marisco para levantar na loja ou receber por entrega.</p>${button("bag","Começar encomenda","new","primary")}</div></section>`;}
 function render(){
+ if(!teamSession)return;
  document.title=(page==="encomendas"?"Encomendas":page==="cliente"?"Cliente":"Histórico")+" · Delicias do Mar";
  document.querySelectorAll("[data-nav]").forEach(a=>{a.classList.toggle("active",a.dataset.nav===page);if(a.dataset.nav===page)a.setAttribute("aria-current","page");else a.removeAttribute("aria-current");});
  const total=page==="encomendas"?orders.filter(o=>!o.cancelled&&!o.handed&&o.tasks[station]!==undefined).length:orders.length;
@@ -340,7 +361,7 @@ const steps=["Pessoas","Ocasião","Marisco","Artigos","Contacto e horário","Res
 const stepTitles=["Quantas pessoas são?","Qual é a ocasião?","Que marisco prefere?","O que vai levar?","Quando e como quer receber a encomenda?","Está tudo certo?"];
 const drafts=new Map();
 let draftScope="",draftStep=1,hadFormError="";
-const keyFor=scope=>"ddm-questionario-1-"+scope;
+const keyFor=scope=>"ddm-questionario-2-"+teamSession.user.id+"-"+scope;
 function persistDraft(){
  if(!draft)return;
  const snapshot={draft,step:draftStep};
@@ -348,9 +369,15 @@ function persistDraft(){
  try{localStorage.setItem(keyFor(draftScope),JSON.stringify(snapshot));}catch{}
 }
 function startOrder(){
+ if(!teamSession)return;
  const scope=page==="cliente"?"Cliente":"Equipa";
  let saved=drafts.get(scope);
- try{saved=JSON.parse(localStorage.getItem(keyFor(scope)));}catch{}
+ try{
+  const oldKey="ddm-questionario-1-"+scope;
+  const legacy=localStorage.getItem(oldKey);
+  if(legacy&&!localStorage.getItem(keyFor(scope))){localStorage.setItem(keyFor(scope),legacy);localStorage.removeItem(oldKey);}
+  saved=JSON.parse(localStorage.getItem(keyFor(scope)));
+ }catch{}
  const t=new Date(Date.now()+3600000);
  draftScope=scope;draftStep=saved?.step||1;hadFormError="";
  draft=saved?.draft||{channel:scope,requestKey:mkKey(),party:1,occasion:"",occasionOther:"",liked:[],avoid:[],likedText:"",avoidText:"",
@@ -565,5 +592,6 @@ window.addEventListener("hashchange",route);window.addEventListener("online",syn
 window.addEventListener("offline",()=>{++serial;synced=false;networkProblem=true;renderSync();});
 document.addEventListener("visibilitychange",()=>{if(!document.hidden)sync();});
 document.querySelector("#retrySync").onclick=sync;
-setInterval(()=>{if(!document.hidden&&!busy)sync();},3500);route();
+const auth=teamAuth(base,publicKey,showSession);
+setInterval(()=>{if(!document.hidden&&!busy)sync();},3500);
 setInterval(()=>{updateClock();refreshDeadlines();},1000);

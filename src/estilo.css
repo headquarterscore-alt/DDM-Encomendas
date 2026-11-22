@@ -110,3 +110,9 @@ nav [data-nav],.ticket .ref,.ticket-customer,.task-btns .btn,.global .btn,.list-
 .contact-actions:has(strong[hidden]):not(:has(a)) {display:none}
 .quiz .form-foot {position:sticky;bottom:0;z-index:1;gap:12px;padding:10px 0;background:white}
 .quiz .form-foot .btn {flex:1;justify-content:center}
+
+#loginPanel {max-width:440px;margin:8vh auto;padding:24px;background:white;border:1px solid var(--line);border-radius:12px}
+#loginPanel h1 {margin:0 0 24px}
+#loginPanel input,#loginPanel button,#signOut {min-height:56px}
+#loginPanel button {width:100%;justify-content:center}
+.session-locked #main,.session-locked nav,.session-locked #networkStatus,.session-locked #dialog,.session-locked #undoNotice,.session-locked #writeStatus,.session-locked #toast,#signOut[hidden],#loginPanel[hidden] {display:none}
