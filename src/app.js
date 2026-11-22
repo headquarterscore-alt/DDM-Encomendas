@@ -76,6 +76,7 @@ const unitKeys={"un.":"un","dz.":"dz","kg":"kg"};
 async function rest(path,payload){
  let r,text;try{r=await fetch(base+"/rest/v1/"+path,{signal:AbortSignal.timeout(8000),method:payload?"POST":"GET",headers:{apikey:publicKey,"Content-Type":"application/json"},body:payload?JSON.stringify(payload):undefined,cache:"no-store"});text=await r.text();}catch{throw Error("Sem ligação à demo. Verifica a ligação à internet e tenta novamente.");}
  let j=null;if(text){try{j=JSON.parse(text);}catch{}}
+ if(!r.ok&&path==="rpc/create_order"&&j?.code&&j.code!=="P0001")throw Error("Não foi possível registar a encomenda. Confirme os dados e tente novamente.");
  if(!r.ok)throw Object.assign(Error(j?.message||"O servidor não respondeu como esperado (erro "+r.status+"). Tenta novamente."),{status:r.status});
  if(text&&j===null)throw Error("Resposta inesperada do servidor. Tenta novamente.");
  return j??{};
@@ -360,7 +361,11 @@ function startOrder(){
  }
  openDialog("order");drawForm();
 }
-const normalizedPhone=v=>{const n=String(v||"").replace(/[\s()-]/g,"");return /^(?:\+351)?[0-9]{9}$/.test(n)?"+351"+n.slice(-9):"";};
+function normalizedPhone(value){
+ const digits=String(value??"").replace(/[\s()-]/g,"");
+ if(/^[0-9]{9}$/.test(digits))return "+351"+digits;
+ return /^\+[1-9][0-9]{7,14}$/.test(digits)?digits:"";
+}
 const preferences=(o,k)=>[...o[k],o[k+"Text"].trim()].filter(Boolean);
 function suggestion(){
  const count=Math.ceil(draft.party/10);
@@ -390,7 +395,7 @@ function counter(label,key,value,max){
 function shellfish(group,title){
  const names=catalog.filter(p=>p.cat===2||p.cat===3||["polvo","tigre","lulas"].includes(p.id)).map(p=>[p.name,p.name]);
  return `<fieldset><legend>${title}</legend>${options(group,[["none","Sem preferência"],...names],draft[group].length||draft[group+"Text"]?draft[group]:["none"])}
- ${input("Outro (opcional)",group+"Text",draft[group+"Text"],'maxlength="180"')}</fieldset>`;
+ ${input("Outro (opcional)",group+"Text",draft[group+"Text"],'maxlength="60"')}</fieldset>`;
 }
 function articleStep(){
  const auto=suggestion(),{size,count}=boatSelection();
@@ -416,7 +421,7 @@ function contactStep(){
  <div class="form-grid">${input("Dia","day",draft.day,`type="date" min="${dayNow()}" max="${shiftDay(dayNow(),365)}" required`)}${input("Hora","time",draft.time,'type="time" required')}</div>
  ${input("Nome do cliente ou restaurante","name",draft.name,'required maxlength="80"')}
  ${options("type",[["particular","Particular"],["restaurante","Restaurante"]],draft.type)}
- ${input("Telemóvel","phone",draft.phone,'type="tel" inputmode="tel" required maxlength="24" placeholder="9 dígitos ou +351"')}
+ ${input("Telemóvel","phone",draft.phone,'type="tel" inputmode="tel" required maxlength="40" placeholder="Número português ou +indicativo e número"')}
  <p>Usamos o nome e o telemóvel só para esta encomenda.</p>
  ${input("Notas (opcional)","note",draft.note,'maxlength="600"')}
  ${draft.channel==="Equipa"?`<label class="checkfield"><input data-field="o.priority" type="checkbox" ${draft.priority?"checked":""}>Encomenda prioritária</label>`:""}`;
@@ -442,9 +447,17 @@ function drawForm(){
 }
 function quizError(){
  if(draftStep===2&&(!draft.occasion||(draft.occasion==="outro"&&!draft.occasionOther.trim())))return "Indique a ocasião.";
+ if(draftStep===2&&draft.occasion==="outro"&&Array.from(draft.occasionOther).length>100)return "A descrição da ocasião pode ter até 100 caracteres.";
+ if(draftStep===3){
+  for(const key of ["liked","avoid"]){
+   const items=preferences(draft,key);
+   if(items.length>30)return "Escolha até 30 itens por lista de marisco.";
+   if(items.some(s=>Array.from(s).length>60))return "Cada item de marisco pode ter até 60 caracteres.";
+  }
+ }
  if(draftStep===4&&!allItems().length)return "Adicione pelo menos um artigo para continuar.";
  if(draftStep===5){
-  if(!normalizedPhone(draft.phone))return "Indique um número português com 9 dígitos, com ou sem +351.";
+  if(!normalizedPhone(draft.phone))return "Indique 9 dígitos para Portugal ou + seguido do indicativo e do número (8 a 15 dígitos).";
   if(!draft.name.trim()||(draft.delivery==="Entrega"&&!draft.address.trim()))return "Preencha os campos obrigatórios.";
  }
  return "";

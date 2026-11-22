@@ -53,7 +53,8 @@ module.exports=async function testQuestionnaire(browser,url,base){
    if(team)await p.getByLabel('Encomenda prioritária').check();
    await p.getByLabel('Telemóvel',{exact:true}).fill('123');await click('Continuar');
    assert.match(await p.locator('#quizError').innerText(),/9 dígitos/);
-   await p.getByLabel('Telemóvel',{exact:true}).fill(idx%2?'+351 900 000 000':'900000000');await click('Continuar');
+   const phone=['+44 7700 900123','+351 900 000 000','900000000','+1 (202) 555-0143'][idx];
+   await p.getByLabel('Telemóvel',{exact:true}).fill(phone);await click('Continuar');
    await click('Voltar');assert.match(await p.getByLabel('Nome do cliente ou restaurante').inputValue(),/TESTE LOCAL/);
    await click('Continuar');await click('Confirmar encomenda');
    if(idx===0){
@@ -64,7 +65,7 @@ module.exports=async function testQuestionnaire(browser,url,base){
    if(idx===0)assert.equal(attempts[0],attempts[1]);
    assert.equal(await p.locator('.order-number').innerText(),'TESTE-quiz-'+(idx+1));
    const data=submitted[idx];
-   assert.equal(data.customer_phone,'+351900000000');
+   assert.equal(data.customer_phone,['+447700900123','+351900000000','+351900000000','+12025550143'][idx]);
    assert.equal(data.fulfilment,delivery?'entrega':'recolha');
    assert.equal(data.address,delivery?'Morada de teste':'');
    assert.equal(data.priority,team?'alta':'normal');
@@ -81,7 +82,7 @@ module.exports=async function testQuestionnaire(browser,url,base){
   await p.goto(url+'/#encomendas/bancada');
   const card=p.locator('[data-order="quiz-1"]');
   assert.match(await card.innerText(),/Marisco a evitar.*Ostras/s);
-  assert.equal(await card.getByRole('link',{name:'Ligar ao cliente'}).getAttribute('href'),'tel:+351900000000');
+  assert.equal(await card.getByRole('link',{name:'Ligar ao cliente'}).getAttribute('href'),'tel:+447700900123');
   await card.locator('.ref').click();assert.match(await p.locator('#dialog').innerText(),/Ostras/);
   console.log('PASS: quatro ocasiões, modos Cliente e Equipa, entrega e levantamento, só peixe, telemóvel, rascunho e contacto no posto');
  }finally{await context.close();}
