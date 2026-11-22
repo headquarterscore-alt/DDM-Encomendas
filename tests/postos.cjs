@@ -83,7 +83,7 @@ async function until(fn,message){for(let i=0;i<100;i++){if(await fn())return;awa
   for(const p of pages){await p.locator('[data-act="focus"]').click();assert.equal(await p.locator('#search').count(),0);}
   for(const p of pages){
    assert.deepEqual(await p.locator('[data-nav]').allTextContents(),['Encomendas','Histórico','Cliente']);
-   assert.ok(await p.locator('nav').isVisible(),'navigation remains available in station mode');
+   assert.ok(await p.locator('.top').isHidden(),'top bar hidden in station mode');
    assert.equal(await p.getByText('Modo demo',{exact:true}).count(),0);
    assert.equal(await p.locator('[data-station]').count(),0);
    assert.equal(await p.locator('.station-header h1').count(),0);
@@ -120,10 +120,12 @@ async function until(fn,message){for(let i=0;i<100;i++){if(await fn())return;awa
   assert.equal(await barcas.locator('.lane:visible').count(),2);
   await barcas.getByRole('button',{name:'Todas',exact:true}).click();
   assert.ok(await card(barcas).isVisible());
+  await barcas.getByRole('button',{name:'Sair do modo posto',exact:true}).click();
   await barcas.getByRole('link',{name:'Histórico'}).click();
   await barcas.locator('.order-table').waitFor();
   assert.ok(barcas.url().endsWith('#historico'));
   await barcas.getByRole('link',{name:'Encomendas',exact:true}).click();
+  await barcas.getByRole('button',{name:'Modo posto em ecrã inteiro',exact:true}).click();
   await until(async()=>!(await barcas.locator('#toast').getAttribute('class')).includes('on'),'toast cleared for screenshot');
   const imageDir=process.argv.includes('--header-images')?'docs/topo':'docs/postos';
   mkdirSync(resolve(root,imageDir),{recursive:true});
@@ -155,6 +157,7 @@ async function until(fn,message){for(let i=0;i<100;i++){if(await fn())return;awa
    await bancada.getByRole('button',{name:'Reabrir',exact:true}).waitFor();
    await bancada.getByRole('button',{name:'Fechar',exact:true}).click();
    assert.equal(await card(bancada).count(),0);
+   await bancada.getByRole('button',{name:'Sair do modo posto',exact:true}).click();
    await bancada.getByRole('link',{name:'Histórico'}).click();
    await bancada.locator('.list-tabs').waitFor();
    assert.deepEqual(await bancada.locator('[data-list]').allTextContents(),['Todas','Por preparar','Prontas','Entregues','Canceladas']);
@@ -168,6 +171,7 @@ async function until(fn,message){for(let i=0;i<100;i++){if(await fn())return;awa
    assert.deepEqual(fixture.station_tasks.map(t=>t.status),['pronta','em_preparacao']);
    await bancada.getByRole('button',{name:'Fechar',exact:true}).click();
    await bancada.getByRole('link',{name:'Encomendas',exact:true}).click();
+   await bancada.getByRole('button',{name:'Modo posto em ecrã inteiro',exact:true}).click();
   }
   if(!live){failNext=true;await card(bancada).getByRole('button',{name:'Pronta',exact:true}).click();await until(async()=>await bancada.locator('#writeStatus').innerText()==='Confirma o estado antes de tentar novamente.','failure feedback');assert.ok(await card(bancada).getByRole('button',{name:'Pronta',exact:true}).isEnabled());}
   await click(bancada,'Pronta');

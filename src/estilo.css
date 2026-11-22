@@ -58,7 +58,7 @@ dialog{max-width:min(630px,calc(100% - 24px));width:630px;padding:0;max-height:9
 @media(max-width:690px){.ticket-deadline>strong{font-size:38px}.pagehead h1{font-size:30px}.head-actions{width:100%;margin:0;flex-wrap:wrap;justify-content:space-between}.focus .stations{max-width:none}.tools{flex-wrap:wrap}.searchbox{flex-basis:100%}.write-status{font-size:13px}.global{flex-wrap:wrap}.task-btns .btn{width:100%}}
 
 /* Barra de trabalho: posto, data, relógio e ações sempre à mão. */
-.top,.focus .top{display:block;background:var(--bg);color:var(--navy)}
+.top{display:block;background:var(--bg);color:var(--navy)}
 .top-in{min-height:72px;gap:28px}.top .brand{font-size:20px}.brand img{filter:none}.brand small{color:var(--muted)}
 .top nav{gap:12px}.top nav a{min-height:60px;padding:12px 18px;color:var(--muted);font-size:17px;border-radius:8px;gap:9px}.top nav a.active,.top nav a:hover{color:var(--navy);background:#e8eff3}.top nav a.active:after{height:3px;left:18px;right:18px}
 #installApp{color:var(--navy);margin:0 0 0 auto;min-height:56px;font-size:15px;white-space:nowrap}
