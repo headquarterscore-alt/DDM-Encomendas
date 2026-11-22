@@ -393,7 +393,7 @@ function startOrder(scope="Cliente"){
  const t=new Date(Date.now()+3600000);
  draftScope=scope;draftStep=saved?.step||1;hadFormError="";
  draft=saved?.draft||{channel:scope,requestKey:mkKey(),party:null,occasion:"",occasionOther:"",liked:[],avoid:[],likedText:"",avoidText:"",
-  boatChoice:"auto",boatCount:1,boatUse:"",itemCategory:1,items:[],name:"",type:"particular",phone:"",delivery:"Levantamento",address:"",
+  boatCount:1,boatUse:"",itemCategory:1,items:[],name:"",type:"particular",phone:"",delivery:"Levantamento",address:"",
   day:day>lisbonDay(t)?day:lisbonDay(t),time:new Intl.DateTimeFormat("en-GB",{timeZone:"Europe/Lisbon",hour:"2-digit",minute:"2-digit",hourCycle:"h23"}).format(t),note:"",priority:false};
  for(const item of draft.items){
   if(item.catalogEntry&&!product(item.product))catalog.push(item.catalogEntry);
@@ -406,19 +406,23 @@ function normalizedPhone(value){
  return /^\+[1-9][0-9]{7,14}$/.test(digits)?digits:"";
 }
 const preferences=(o,k)=>[...o[k],o[k+"Text"].trim()].filter(Boolean);
-function suggestedBoat(){
- return draft.party<=3?"bp":draft.party<=6?"bm":"bg";
-}
 function limitBoatBudget(id,value){
  const [min,max]=boatBudgets[id];
  return Math.min(max,Math.max(min,Number(value)||min));
 }
-function boatPrice(id){
- return limitBoatBudget(id,Number(draft.party)*20||boatBudgets[id][0]);
+function boatForBudget(budget){
+ if(budget<boatBudgets.bm[0])return "bp";
+ return budget<boatBudgets.bg[0]?"bm":"bg";
+}
+function budgetForBoat(id,value){
+ const [min,max]=boatBudgets[id];
+ return Math.min(id==="bg"?max:max-1,Math.max(min,value));
 }
 function allItems(){
- const size=product(draft.boatChoice)?.cat===0?draft.boatChoice:suggestedBoat();
- const budget=limitBoatBudget(size,draft.adjustedBudget??boatPrice(size));
+ const suggested=Math.max(boatBudgets.bp[0],Number(draft.party)*20);
+ const initial=Object.hasOwn(boatBudgets,draft.boatChoice)?budgetForBoat(draft.boatChoice,suggested):suggested;
+ const budget=Math.min(boatBudgets.bg[1],Math.max(boatBudgets.bp[0],Number(draft.adjustedBudget??initial)));
+ const size=boatForBudget(budget);
  return [{product:size,qty:1,people:Number(draft.party)||null,budget,use:draft.occasion==="petisco"?"Petisco":"Refeição",note:""},...draft.items];
 }
 const input=(label,key,value,attrs="")=>`<label class="field"><span>${label}</span><input data-field="o.${key}" value="${esc(value)}" ${attrs}></label>`;
@@ -434,19 +438,18 @@ function shellfish(group,title){
  ${input("Outro (opcional)",group+"Text",draft[group+"Text"],'maxlength="60"')}</fieldset>`;
 }
 function articleStep(){
- const suggested=suggestedBoat(),{product:selected,budget}=allItems()[0];
- const [min,max]=boatBudgets[selected];
+ const {product:selected,budget}=allItems()[0];
+ const min=boatBudgets.bp[0],max=boatBudgets.bg[1];
  const photos={bp:"barca_pequena.png",bm:"barca_media.png",bg:"barca_grande.png"};
  const cards=Object.keys(capacities).map(id=>`
-  <button type="button" data-pick="boatChoice" data-value="${id}" aria-pressed="${selected===id}" class="${id===suggested?"suggested":""}">
+  <button type="button" data-pick="boatChoice" data-value="${id}" aria-pressed="${selected===id}">
    <img src="./${photos[id]}" alt="">
    <b>${product(id).name}</b>
-   ${id===suggested?"<small>Sugerida</small>":""}
   </button>`).join("");
- return `<p class="budget-suggestion">Valor sugerido · <strong>${fmtQty(boatPrice(selected))} €</strong></p>
+ return `<div class="budget-title"><span>Valor da barca</span><output for="boatBudget">${fmtQty(budget)} €</output></div>
  <div class="boat-options">${cards}</div>
- <label class="boat-budget"><span>Valor da ${product(selected).name.toLowerCase()}</span><output>${fmtQty(budget)} €</output>
- <input type="range" data-field="o.adjustedBudget" aria-label="Ajustar valor da barca" aria-valuetext="${fmtQty(budget)} €" min="${min}" max="${max}" step="1" value="${budget}">
+ <label class="boat-budget">
+ <input id="boatBudget" type="range" data-field="o.adjustedBudget" aria-label="Ajustar valor da barca" aria-valuetext="${fmtQty(budget)} € · ${product(selected).name}" min="${min}" max="${max}" step="1" value="${budget}">
  <small><span>${min} €</span><span>${max} €</span></small></label>`;
 }
 function contactStep(){
@@ -522,8 +525,11 @@ function quizClick(b){
    if(v==="none"){draft[key]=[];draft[key+"Text"]="";}
    else draft[key]=draft[key].includes(v)?draft[key].filter(x=>x!==v):[...draft[key],v];
   }else{
-   if(key==="boatChoice"&&allItems()[0].product!==v)delete draft.adjustedBudget;
-   draft[key]=v;
+   if(key==="boatChoice"){
+    const current=allItems()[0];
+    if(current.product!==v)draft.adjustedBudget=budgetForBoat(v,Number(draft.party)*20);
+   }
+   else draft[key]=v;
    if(key==="occasion"&&v!=="outro"){nextQuizStep();return;}
   }
  }else if(b.dataset.add){
@@ -640,10 +646,13 @@ document.addEventListener("input",e=>{
  if(!t.closest("#quizForm")||!draft)return;
  if(t.dataset.field){const k=t.dataset.field.slice(2);draft[k]=t.type==="checkbox"?t.checked:t.value;}
  if(t.dataset.item!==undefined)draft.items[Number(t.dataset.item)][t.dataset.prop]=t.dataset.prop==="qty"?Number(t.value):t.value;
- if(t.dataset.field==="o.party"){draft.party=Number(t.value)||null;delete draft.adjustedBudget;t.previousElementSibling.textContent=draft.party?partyLabel(draft.party):"Por indicar";}
+ if(t.dataset.field==="o.party"){draft.party=Number(t.value)||null;delete draft.adjustedBudget;delete draft.boatChoice;t.previousElementSibling.textContent=draft.party?partyLabel(draft.party):"Por indicar";}
  if(t.dataset.field==="o.adjustedBudget"){
   const amount=fmtQty(t.value)+" €";
-  t.previousElementSibling.textContent=amount;t.setAttribute("aria-valuetext",amount);
+  const selected=boatForBudget(Number(t.value));
+  panel.querySelector(".budget-title output").textContent=amount;
+  t.setAttribute("aria-valuetext",amount+" · "+product(selected).name);
+  panel.querySelectorAll(".boat-options button").forEach(card=>card.setAttribute("aria-pressed",card.dataset.value===selected));
  }
  if(["o.likedText","o.avoidText"].includes(t.dataset.field)){
   const key=t.dataset.field==="o.likedText"?"liked":"avoid";

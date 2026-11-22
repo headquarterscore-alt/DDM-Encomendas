@@ -42,13 +42,12 @@ module.exports=async function testQuestionnaire(browser,url,base){
    }
    await click('Continuar');
    assert.equal(await p.locator('.boat-options button').count(),3);
-   if(!people)assert.match(await p.locator('.budget-suggestion').innerText(),/50 €/);
+   if(!people)assert.match(await p.locator('.budget-title').innerText(),/50 €/);
    if(people===1){
     const value=p.getByRole('slider',{name:'Ajustar valor da barca'});
-    for(const [id,min,max] of [['bm','100','200'],['bg','200','400'],['bp','50','100']]){
+    for(const [id,min] of [['bm','100'],['bg','200'],['bp','50']]){
      await p.locator(`.boat-options [data-value="${id}"]`).click();
      assert.equal(await value.inputValue(),min);
-     assert.equal(await value.getAttribute('max'),max);
     }
    }
    await click('Continuar');
@@ -93,7 +92,7 @@ module.exports=async function testQuestionnaire(browser,url,base){
   await p.goto(url+'/#encomendas/barcas');await click('Encomendar barca');
   if(process.argv.includes('--update-images'))await p.locator('#dialog').screenshot({path:require('node:path').resolve(__dirname,'../docs/postos/pessoas.png')});
   await p.getByRole('slider').fill('6');await click('Continuar');await click('Refeição');await click('Continuar');
-  assert.match(await p.locator('.boat-options .suggested').innerText(),/Barca média/);
+  assert.match(await p.locator('.boat-options [aria-pressed=true]').innerText(),/Barca média/);
   const photos=p.locator('.boat-options img');
   await p.waitForFunction(()=>[...document.querySelectorAll('.boat-options img')].every(img=>img.complete&&img.naturalWidth>0));
   assert.deepEqual(await photos.evaluateAll(nodes=>nodes.map(img=>img.getAttribute('src'))),[
@@ -102,12 +101,15 @@ module.exports=async function testQuestionnaire(browser,url,base){
   if(process.argv.includes('--boat-image'))await p.locator('#dialog').screenshot({path:require('node:path').resolve(__dirname,'../docs/postos/escolher-barca.png')});
   await p.locator('.boat-options [data-value="bg"]').click();
   assert.equal(await p.locator('.boat-options [data-value="bg"]').getAttribute('aria-pressed'),'true');
-  assert.equal(await p.locator('.boat-options .suggested').getAttribute('data-value'),'bm');
   const slider=p.getByRole('slider',{name:'Ajustar valor da barca'});
   assert.equal(await slider.inputValue(),'200');
-  assert.equal(await slider.getAttribute('min'),'200');
+  assert.equal(await slider.getAttribute('min'),'50');
   assert.equal(await slider.getAttribute('max'),'400');
-  await slider.fill('275');
+  for(const [value,size] of [['99','bp'],['100','bm'],['199','bm'],['200','bg'],['275','bg']]){
+   await slider.fill(value);
+   assert.equal(await p.locator('.boat-options [aria-pressed=true]').getAttribute('data-value'),size);
+   assert.equal(await p.locator('.budget-title output').innerText(),value+' €');
+  }
   await click('Continuar');await p.getByLabel('Encomenda prioritária').check();
   await click('Escrever à mão');const pad=p.locator('[data-ink] canvas');await pad.click();
   await pad.evaluate(el=>{const ctx=el.getContext('2d');ctx.fillStyle='black';ctx.font='90px Arial';ctx.fillText('MARIA',50,145);});
@@ -119,6 +121,7 @@ module.exports=async function testQuestionnaire(browser,url,base){
   assert.equal(submitted.at(-1).source,'equipa');assert.equal(submitted.at(-1).party_size,6);
   assert.equal(submitted.at(-1).priority,'alta');assert.equal(submitted.at(-1).customer_phone,null);
   assert.equal(submitted.at(-1).items[0].budget,275);
+  assert.equal(submitted.at(-1).items[0].barca_size,'grande');
   console.log('PASS: questionário do Cliente: escrita do nome, preço, levantamento, campos opcionais e rascunho');
  }finally{await context.close();}
 };
