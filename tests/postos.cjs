@@ -218,6 +218,7 @@ async function until(fn,message){for(let i=0;i<100;i++){if(await fn())return;awa
    await p.locator('.table-row[data-detail]').waitFor();
   }
   if(!live)await require("./questionario.cjs")(browser,url,base);
+  if(!live)await require("./rapida.cjs")(browser,url,base);
   assert.deepEqual(errors,[]);
   console.log('PASS: independent sessions, mixed order, per-product quantities, simplified workflow, filters, handoff gate, device persistence, 56px targets'+(!live?', repeated taps, failed save, offline/reconnect':''));
  }finally{await browser.close();server.close();}
