@@ -86,6 +86,15 @@ module.exports=async function testQuestionnaire(browser,url,base){
   if(process.argv.includes('--update-images'))await p.locator('#dialog').screenshot({path:require('node:path').resolve(__dirname,'../docs/postos/pessoas.png')});
   await p.getByRole('slider').fill('6');await click('Continuar');await click('Refeição');await click('Continuar');
   assert.match(await p.locator('.boat-options .suggested').innerText(),/Barca média/);
+  const photos=p.locator('.boat-options img');
+  await p.waitForFunction(()=>[...document.querySelectorAll('.boat-options img')].every(img=>img.complete&&img.naturalWidth>0));
+  assert.deepEqual(await photos.evaluateAll(nodes=>nodes.map(img=>img.getAttribute('src'))),[
+   './barca_pequena.png','./barca_media.png','./barca_grande.png'
+  ]);
+  if(process.argv.includes('--boat-image'))await p.locator('#dialog').screenshot({path:require('node:path').resolve(__dirname,'../docs/postos/escolher-barca.png')});
+  await p.locator('.boat-options [data-value="bg"]').click();
+  assert.equal(await p.locator('.boat-options [data-value="bg"]').getAttribute('aria-pressed'),'true');
+  assert.equal(await p.locator('.boat-options .suggested').getAttribute('data-value'),'bm');
   await click('Continuar');await p.getByLabel('Encomenda prioritária').check();
   const name=p.getByLabel('Nome do cliente ou restaurante');
   await name.click();const pad=p.locator('[data-ink] canvas');await pad.click();

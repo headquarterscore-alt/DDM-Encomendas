@@ -431,7 +431,14 @@ function shellfish(group,title){
 }
 function articleStep(){
  const suggested=suggestedBoat(),selected=allItems()[0].product;
- return `<div class="boat-options">${Object.keys(capacities).map(id=>`<button type="button" data-pick="boatChoice" data-value="${id}" aria-pressed="${selected===id}" class="${id===suggested?"suggested":""}">${icon("boat",40)}<b>${product(id).name}</b><strong>${fmtQty(boatPrice(id))} €</strong>${id===suggested?"<small>Sugerida</small>":""}</button>`).join("")}</div><p>${draft.party?"Sugestão de 20 € por pessoa. ":""}Barca pequena a partir de 50 €.</p>`;
+ const photos={bp:"barca_pequena.png",bm:"barca_media.png",bg:"barca_grande.png"};
+ const cards=Object.keys(capacities).map(id=>`
+  <button type="button" data-pick="boatChoice" data-value="${id}" aria-pressed="${selected===id}" class="${id===suggested?"suggested":""}">
+   <img src="./${photos[id]}" alt="">
+   <b>${product(id).name}</b><strong>${fmtQty(boatPrice(id))} €</strong>
+   ${id===suggested?"<small>Sugerida</small>":""}
+  </button>`).join("");
+ return `<div class="boat-options">${cards}</div><p>${draft.party?"Sugestão de 20 € por pessoa. ":""}Barca pequena a partir de 50 €.</p>`;
 }
 function contactStep(){
  return ` <div class="form-grid">${input("Dia","day",draft.day,`type="date" min="${dayNow()}" max="${shiftDay(dayNow(),365)}" required`)}${input("Hora","time",draft.time,'type="time" required')}</div>

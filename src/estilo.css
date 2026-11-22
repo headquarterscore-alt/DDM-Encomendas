@@ -141,3 +141,9 @@ nav [data-nav],.ticket .ref,.ticket-customer,.task-btns .btn,.global .btn,.list-
 @media(max-width:690px){.lane-body{grid-template-columns:minmax(0,1fr)}}
 .barcas-ticket{display:flex;flex-direction:column}.barcas-ticket .ticket-products{order:-3;margin:0}.boat-line{display:grid;grid-template-columns:auto 1fr;align-items:baseline;gap:3px 12px}.boat-line>strong{font-size:32px}.boat-line h4{font-size:22px;margin:0}.boat-line small,.boat-line .product-note{grid-column:2}.barcas-ticket .ticket-deadline{order:-2;margin:6px 0;padding:5px 0;background:transparent;justify-content:flex-start;gap:8px}.barcas-ticket .ticket-deadline strong{font-size:22px}.barcas-ticket .ticket-top:empty{display:none}.barcas-ticket .ticket-customer strong{font-size:18px}.barcas-ticket .ticket-customer{min-height:44px}.party-slider{display:grid;gap:12px}.party-slider output{font-size:36px;font-weight:750}.party-slider input{width:100%;height:56px;accent-color:var(--navy)}.boat-options{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.boat-options button{display:grid;place-items:center;align-content:center;gap:8px;min-height:140px;padding:8px;border:2px solid var(--line);border-radius:12px}.boat-options .suggested{box-shadow:0 0 12px #ec9b3190}.boat-options [aria-pressed=true]{border-color:var(--navy);background:#eaf2f6}.boat-options strong{font-size:22px}
 [data-ink] canvas{display:block;width:100%;height:110px;touch-action:none;border:2px solid var(--line);border-radius:8px}[data-ink]:not(:empty){display:grid;gap:8px;margin-bottom:16px}
+.boat-options button{position:relative;align-content:start;padding-bottom:30px;text-align:center}
+.boat-options img{
+ display:block;width:100%;min-width:0;aspect-ratio:3 / 1;
+ object-fit:cover;object-position:center 58%;mix-blend-mode:multiply
+}
+.boat-options small{position:absolute;bottom:8px;color:#784800;font-weight:700}
