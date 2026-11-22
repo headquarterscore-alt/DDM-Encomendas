@@ -33,7 +33,7 @@ Seleciona **Peixe-Marisco** ou **Barcas** e ativa o botão **Modo posto** no cab
 
 **Encomendas** (`#encomendas`) abre o posto guardado. Os atalhos `#encomendas/bancada` e `#encomendas/barcas` escolhem o posto. Os antigos atalhos `#preparacao` continuam a abrir a fila. **Histórico** (`#historico`) mostra a lista do dia e **Cliente** (`#cliente`) abre o catálogo.
 
-Toca em **Iniciar** e depois em **Barca pronta** ou **Preparação pronta**. O marisco da barca pertence ao posto Barcas. O levantamento ou a entrega só pode ser confirmado quando todos os postos da encomenda estiverem prontos. Os filtros mostram as encomendas do estado escolhido. No telemóvel, cada filtro de estado abre apenas a respetiva coluna; **Todas** mostra as três em sequência.
+Toca em **Pronta** uma única vez quando o trabalho desse posto estiver terminado. As filas mostram **Por preparar** e **Prontas**, com o cliente em destaque. As tarefas antigas em preparação aparecem em **Por preparar** e também terminam num toque. O marisco da barca pertence ao posto Barcas. O levantamento ou a entrega só pode ser confirmado quando todos os postos da encomenda estiverem prontos. Os filtros mostram as encomendas do estado escolhido. No telemóvel, cada filtro de estado abre apenas a respetiva coluna; **Todas** mostra as três em sequência.
 
 Antes de publicar este fluxo, rever e aprovar [a alteração de update_task](migrations/001_fluxo_postos.sql). A função em produção exige os três passos antigos para concluir a barca. A migração preserva as colunas e os pedidos das versões anteriores da app.
 
@@ -51,7 +51,7 @@ Rever [003_questionario.sql](migrations/003_questionario.sql) antes da publicaç
 
 ## Histórico
 
-Escolhe o dia e filtra por **Todas**, **Por iniciar**, **Em preparação**, **Prontas**, **Entregues** ou **Canceladas**. Abre a encomenda para ver as ações disponíveis.
+Escolhe o dia e filtra por **Todas**, **Por preparar**, **Prontas**, **Entregues** ou **Canceladas**. Abre a encomenda para ver as ações disponíveis.
 
 Depois de confirmar um levantamento ou entrega, **Desfazer** fica disponível durante oito segundos. No Histórico, abre uma encomenda entregue e confirma **Desfazer levantamento** ou **Desfazer entrega** para a devolver a Prontas.
 

@@ -1,6 +1,7 @@
 import {teamAuth} from './team-auth.js';
 const stations = {bancada:"Peixe-Marisco",barcas:"Barcas"};
-const states = ["Por iniciar","Em preparação","Prontas"];
+const states = ["Por preparar","Por preparar","Prontas"];
+const preparationStates=[0,2];
 const categories = ["Barcas","Peixe fresco","Marisco fresco","Marisco cozido","Congelados"];
 const catalog = [
   {id:"bp",cat:0,name:"Barca pequena",unit:"un.",size:"50 × 17 cm",budget:50},
@@ -22,7 +23,7 @@ const label=i=>i.name||product(i.product)?.name||"Artigo";
 const unit=i=>i.unit||product(i.product)?.unit||"";
 const fmtQty=n=>Number(n).toLocaleString("pt-PT",{maximumFractionDigits:2});
 const code=id=>refs.get(id)||String(id);
-const globalState=o=>Object.values(o.tasks).every(v=>v===2)?2:Object.values(o.tasks).some(v=>v>0)?1:0;
+const globalState=o=>Object.values(o.tasks).every(v=>v===2)?2:0;
 const typeName=o=>o.type==="restaurante"?"Restaurante":"Particular";
 function lineDescription(i){
  const p=product(i.product);
@@ -141,8 +142,7 @@ async function onlineRequest(url,data){
  const t=row.station_tasks.find(t=>t.station===data.station);const patch={};
  if(!t)throw Error("Posto indisponível.");
  if(data.action==="advance"||data.action==="back"){
- const n=statusKeys.indexOf(t.status)+(data.action==="advance"?1:-1);if(n<0||n>2)throw Error("Atualiza o posto.");
- patch.status=statusKeys[n];patch.device_station=station;
+ patch.status=data.action==="advance"?"pronta":"por_iniciar";patch.device_station=station;
  }else throw Error("Ação indisponível.");
  await rest("rpc/update_task",{p_task_id:t.id,p_expected_version:t.version,p_patch:patch});
  }
@@ -211,18 +211,17 @@ function updateClock(){
 }
 function stationCards(){return `<div class="stations" aria-label="Selecionar posto">${Object.entries(stations).map(([k,title],i)=>`<button data-station="${k}" class="station ${k} ${station===k?"selected":""}" aria-pressed="${station===k}">
 <div class="station-art" aria-hidden="true"></div><div class="station-copy"><span class="station-num"><span class="tiny-rule"></span>POSTO 0${i+1}</span><strong>${title}</strong><span class="station-desc">${k==="barcas"?"Preparação das barcas":"Peixe, marisco e congelados"}</span></div><span class="station-state">${station===k?icon("check",13):""}</span></button>`).join("")}</div>`;}
-function statusPill(n){return `<span class="status-pill ${cls[n]}"><b></b>${["Por iniciar","Em preparação","Pronta"][n]}</span>`;}
+function statusPill(n){return `<span class="status-pill ${cls[n===2?2:0]}"><b></b>${n===2?"Pronta":"Por preparar"}</span>`;}
 const modeIcon=o=>o.delivery==="Entrega"?"truck":"shop";
 function datePicker(){const text=day===dayNow()?"Hoje":day===shiftDay(dayNow(),1)?"Amanhã":dateText(day,{day:"2-digit",month:"short"});return `<label class="date-pick" title="Escolher dia">${icon("calendar",16)}${esc(text)}${icon("chev",13)}<input type="date" id="orderDay" aria-label="Dia das encomendas" value="${esc(day)}"></label>`;}
 function toolbar(total){
  const queue=page==="encomendas";
- const filters=["Todas",...states].map((label,index)=>{
-  const value=index===0?"all":statusKeys[index-1];
+ const filters=["Todas",...preparationStates.map(n=>states[n])].map((label,index)=>{
+  const value=index===0?"all":statusKeys[preparationStates[index-1]];
   return `<button class="btn" data-filter="${value}" aria-pressed="${filter===value}">${label}</button>`;
  }).join("");
  return `<div class="queuehead"><div class="queue-title"><h2>${queue?"Fila de preparação":"Histórico"}</h2><span class="total">${total}</span></div><div class="tools">${datePicker()}</div></div>${queue?`<div class="queue-filters" role="group" aria-label="Estado da preparação">${filters}</div>`:""}`;
 }
-const advanceLabel=(s,n)=>n===0?"Iniciar":s==="barcas"?"Barca pronta":"Preparação pronta";
 const handoffLabel=o=>o.delivery==="Entrega"?"Confirmar entrega":"Confirmar levantamento";
 function contactActions(o){
  const dial=o.phone?`<a class="btn" href="tel:${esc(o.phone)}">Ligar</a>`:"";
@@ -243,12 +242,12 @@ function orderCard(o,n){
  const lines=o.items.filter(i=>group(i)===station);
  const other=station==="barcas"?"bancada":"barcas";
  return `<article class="ticket ${cls[n]} ${station}-ticket" data-order="${o.id}" aria-label="${esc(code(o.id)+" · "+o.name)}"><div class="ticket-top"><button class="ref" data-detail="${o.id}" aria-label="Abrir ${esc(code(o.id))}">${esc(code(o.id))}</button>${o.priority?`<span class="priority">${icon("flag",13)}Prioritária</span>`:""}${o.tasks[other]!==undefined?`<span class="mixed">Dois postos</span>`:""}</div>
+ <button class="ticket-customer" data-detail="${o.id}"><strong>${esc(o.name)}</strong><small>${typeName(o)}</small></button>
  <div class="ticket-deadline"><strong>${esc(o.time)}</strong><span>${icon(modeIcon(o),18)}${esc(o.delivery)}</span></div>
- <button class="ticket-customer" data-detail="${o.id}"><small>${typeName(o)}</small><strong>${esc(o.name)}</strong></button>
  <div class="ticket-products">${lines.map(i=>station==="barcas"?`<div class="ticket-product"><h4>${esc(label(i))}${i.qty>1?` × ${fmtQty(i.qty)}`:""}</h4><div class="boat-spec"><strong>${esc(i.people)} pessoas</strong><span>${esc(i.size||product(i.product)?.size||"")}</span></div><p>${esc(i.use)} · ${fmtQty(i.budget)} € de marisco</p>${i.note?`<p class="product-note">${esc(i.note)}</p>`:""}</div>`:`<div class="ticket-product"><div class="product-heading"><h4>${esc(label(i))}</h4><strong class="product-quantity">${fmtQty(i.qty)} <span>${esc(unit(i))}</span></strong></div><p class="product-cut">Corte: <strong>${esc(i.cut||"Não indicado")}</strong></p>${i.note?`<p class="product-note">${esc(i.note)}</p>`:""}</div>`).join("")}</div>
  ${contactActions(o)}
  ${o.note?`<p class="ticket-note">${esc(o.note)}</p>`:""}
- ${n<2?`<button class="ticket-action primary" data-advance="${o.id}">${advanceLabel(station,n)}</button>`:""}
+ ${n<2?`<button class="ticket-action primary" data-advance="${o.id}">Pronta</button>`:""}
  ${n===2?`<p class="completion">${icon("check",18)} ${station==="barcas"?"Barcas concluídas":"Preparação concluída"}</p>${globalState(o)===2?`<button class="ticket-action primary" data-handoff="${o.id}">${handoffLabel(o)}</button>`:`<p class="awaiting">A aguardar ${other==="barcas"?"as Barcas":"Peixe-Marisco"}</p>`}`:""}
  ${o.tasks[other]!==undefined&&n!==2?`<p class="other-station">${stations[other]}: ${states[o.tasks[other]]}</p>`:""}
  <p class="card-save" data-saving="${o.id}"></p></article>`;
@@ -256,9 +255,10 @@ function orderCard(o,n){
 function empty(text){return `<div class="empty">${icon("bando",24)}<span>${text}</span></div>`;}
 function boardContent(){
  const shown=orders.filter(o=>!o.cancelled && !o.handed && o.tasks[station]!==undefined).sort(byTime);
- const lanes=states.map((title,n)=>{
+ const lanes=preparationStates.map(n=>{
+  const title=states[n];
   const excluded=filter!=="all" && filter!==statusKeys[n];
-  const row=excluded?[]:shown.filter(o=>o.tasks[station]===n);
+  const row=excluded?[]:shown.filter(o=>n===2?o.tasks[station]===2:o.tasks[station]!==2);
   let message="Sem encomendas";
   if(!loaded)message=networkProblem?"Sem ligação. Verifica a ligação à internet.":"A ligar ao posto…";
   if(excluded)message="Fora do filtro";
@@ -272,7 +272,7 @@ function boardContent(){
 function listContent(){
  const stateKey=o=>o.cancelled?"cancelada":o.handed?"entregue":statusKeys[globalState(o)];
  const items=orders.filter(o=>listState==="all"||listState===stateKey(o)).sort(byTime);
- return `<div class="list-tabs">${[["all","Todas"],...statusKeys.map((key,n)=>[key,states[n]]),["entregue","Entregues"],["cancelada","Canceladas"]].map(([key,t])=>`<button data-list="${key}" aria-pressed="${key===listState}" class="${key===listState?"active":""}">${t}</button>`).join("")}</div><div class="order-table"><div class="table-row table-head"><span>Encomenda</span><span>Cliente</span><span>Hora prevista</span><span>Postos</span><span>Estado</span></div>${items.map(o=>`<button data-detail="${o.id}" class="table-row"><strong>${code(o.id)}</strong><span>${esc(o.name)}<small>${typeName(o)}</small></span><span>${esc(o.time)}<small>${esc(o.delivery)}</small></span><span>${Object.keys(o.tasks).map(k=>stations[k]).join(" + ")}</span><span>${o.cancelled?"Cancelada":o.handed?`<span class="delivered">${icon("check",14)} Entregue</span>`:statusPill(globalState(o))}</span></button>`).join("")||empty("Sem encomendas para estes critérios.")}</div>`;
+ return `<div class="list-tabs">${[["all","Todas"],...preparationStates.map(n=>[statusKeys[n],states[n]]),["entregue","Entregues"],["cancelada","Canceladas"]].map(([key,t])=>`<button data-list="${key}" aria-pressed="${key===listState}" class="${key===listState?"active":""}">${t}</button>`).join("")}</div><div class="order-table"><div class="table-row table-head"><span>Encomenda</span><span>Cliente</span><span>Hora prevista</span><span>Postos</span><span>Estado</span></div>${items.map(o=>`<button data-detail="${o.id}" class="table-row"><strong>${code(o.id)}</strong><span>${esc(o.name)}<small>${typeName(o)}</small></span><span>${esc(o.time)}<small>${esc(o.delivery)}</small></span><span>${Object.keys(o.tasks).map(k=>stations[k]).join(" + ")}</span><span>${o.cancelled?"Cancelada":o.handed?`<span class="delivered">${icon("check",14)} Entregue</span>`:statusPill(globalState(o))}</span></button>`).join("")||empty("Sem encomendas para estes critérios.")}</div>`;
 }
 function clientContent(){return `<section class="client-intro"><div><h2>Faça a sua encomenda</h2><p>Escolha uma barca, peixe ou marisco para levantar na loja ou receber por entrega.</p>${button("bag","Começar encomenda","new","primary")}</div></section>`;}
 function render(){
@@ -303,7 +303,7 @@ async function mutate(o,action,extra={}){
  }
  const {order}=result;
  ++serial;updateOrder(order);synced=true;networkProblem=false;lastSync=Date.now();saveMessage="Alteração guardada.";render();if(dialog.open&&dialogMode==="detail")drawDetail();
- if(action==="advance")notice(order.tasks[extra.station||station]===2?"Preparação concluída.":"Preparação iniciada.");
+ if(action==="advance")notice("Preparação concluída.");
  if(action==="handoff"){
   if(dialog.open)dialog.close();
   offerUndo(order);
@@ -342,12 +342,12 @@ function workControls(o,s){
  const n=o.tasks[s];
  return `<div class="task-head"><h3>${icon(s==="barcas"?"boat":"fish")} ${stations[s]}</h3>${statusPill(n)}</div>
  <div class="task-lines">${o.items.filter(i=>group(i)===s).map(i=>`<div class="task-line">${icon(n===2?"checked":s==="barcas"?"boat":"fish",18)}<div><strong>${esc(label(i))}${i.qty>1&&s==="barcas"?" × "+fmtQty(i.qty):""}</strong><small>${esc(lineDescription(i))}${s==="barcas"&&i.note?" · "+esc(i.note):""}</small></div></div>`).join("")}</div>
- ${o.handed||o.cancelled?"":`<div class="task-btns">${n>0?`<button class="btn minor" data-task="back" data-s="${s}">${n===1?"Voltar a por iniciar":"Reabrir preparação"}</button>`:""}${n<2?`<button class="btn dark" data-task="advance" data-s="${s}">${icon(n?"check":"play",15)}${advanceLabel(s,n)}</button>`:""}</div>`}`;
+ ${o.handed||o.cancelled?"":`<div class="task-btns">${n===2?`<button class="btn minor" data-task="back" data-s="${s}">Reabrir preparação</button>`:""}${n<2?`<button class="btn dark" data-task="advance" data-s="${s}">${icon("check",15)}Pronta</button>`:""}</div>`}`;
 }
 function drawDetail(){
  const o=findOrder(detailId);if(!o)return;
  const pos=dialog.scrollTop;
- const state=o.cancelled?"Cancelada":o.handed?"Entregue":globalState(o)===2?"Pronta para entrega":globalState(o)===1?"Em preparação":"Por iniciar";
+ const state=o.cancelled?"Cancelada":o.handed?"Entregue":globalState(o)===2?"Pronta para entrega":"Por preparar";
  panel.innerHTML=modalHead(`${code(o.id)} · ${esc(o.channel)}`,esc(o.name))+`<div class="modal-body"><div class="detail-info"><span>${icon("calendar",16)}${dateText(o.day,{day:"numeric",month:"short"})} · ${esc(o.time)}</span><span>${icon(modeIcon(o),16)}${esc(o.delivery)}</span><span>${icon("user",16)}${typeName(o)}</span></div>
  ${o.address?`<p class="detail-contact">${esc(o.address)}</p>`:""}${o.note?`<div class="note">${icon("note",17)}<div><strong>Notas de preparação</strong><p>${esc(o.note)}</p></div></div>`:""}
  ${contactActions(o)}
