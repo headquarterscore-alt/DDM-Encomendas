@@ -1,7 +1,7 @@
 import {createWorker, PSM} from 'tesseract.js';
 
 export function openPad(host, field){
- host.innerHTML='<canvas width="900" height="210" aria-label="Escreva o nome em letra de imprensa"></canvas><small>Escreva em letra de imprensa</small><div><button type="button" class="btn">Limpar</button> <button type="button" class="btn">Ler nome</button></div><span role="status"></span>';
+ host.innerHTML='<canvas width="900" height="210" aria-label="Escreva o nome à mão"></canvas><small>Escreva em maiúsculas, com as letras separadas.</small><div><button type="button" class="btn">Limpar</button> <button type="button" class="btn">Ler nome</button></div><span role="status"></span>';
  const canvas=host.querySelector('canvas'),ctx=canvas.getContext('2d');
  const [clear,read]=host.querySelectorAll('button'),status=host.querySelector('[role=status]');
  function reset(){ctx.fillStyle='white';ctx.fillRect(0,0,canvas.width,canvas.height);read.disabled=true;}
@@ -27,8 +27,8 @@ export function openPad(host, field){
    const {data}=await worker.recognize(canvas);
    if(!field.isConnected||field.value!==original)return;
    const name=data.text.trim().replace(/\s+/g,' ').slice(0,80);
-   if(name){field.value=name;field.dispatchEvent(new Event('input',{bubbles:true}));status.textContent='Confirme o nome acima.';}
-   else status.textContent='Escreva novamente ou use o teclado.';
+   if(name&&data.confidence>=65){field.value=name;field.dispatchEvent(new Event('input',{bubbles:true}));status.textContent='Confirme o nome acima.';}
+   else status.textContent='A leitura ficou incerta. Tente com letras separadas ou use o teclado.';
   }catch{status.textContent='Não foi possível ler. Pode escrever o nome com o teclado.';}
   finally{clear.disabled=read.disabled=false;if(worker)await worker.terminate();}
  };

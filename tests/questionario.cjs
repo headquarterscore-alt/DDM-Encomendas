@@ -24,7 +24,7 @@ module.exports=async function testQuestionnaire(browser,url,base){
  const p=await context.newPage(),button=name=>p.getByRole('button',{name,exact:true}),click=name=>button(name).click();
  try{
   for(const [idx,occasion] of ['Refeição','Evento','Petisco','Outro'].entries()){
-   const people=idx===1?0:12;
+   const people=idx===1?0:idx===2?1:12;
    await p.goto(url+'/#cliente');
    // A 1.ª vez abre sozinho ao entrar no separador. Depois, o cliente carrega em «Começar encomenda».
    if(idx>0)await click('Começar encomenda');
@@ -42,7 +42,15 @@ module.exports=async function testQuestionnaire(browser,url,base){
    }
    await click('Continuar');
    assert.equal(await p.locator('.boat-options button').count(),3);
-   if(!people)assert.match(await p.locator('.boat-options .suggested').innerText(),/50 €/);
+   if(!people)assert.match(await p.locator('.budget-suggestion').innerText(),/50 €/);
+   if(people===1){
+    const value=p.getByRole('slider',{name:'Ajustar valor da barca'});
+    for(const [id,min,max] of [['bm','100','200'],['bg','200','400'],['bp','50','100']]){
+     await p.locator(`.boat-options [data-value="${id}"]`).click();
+     assert.equal(await value.inputValue(),min);
+     assert.equal(await value.getAttribute('max'),max);
+    }
+   }
    await click('Continuar');
    await p.getByLabel('Nome do cliente ou restaurante').fill('TESTE LOCAL');
    await p.getByLabel('Hora',{exact:true}).fill('00:00');
@@ -95,9 +103,13 @@ module.exports=async function testQuestionnaire(browser,url,base){
   await p.locator('.boat-options [data-value="bg"]').click();
   assert.equal(await p.locator('.boat-options [data-value="bg"]').getAttribute('aria-pressed'),'true');
   assert.equal(await p.locator('.boat-options .suggested').getAttribute('data-value'),'bm');
+  const slider=p.getByRole('slider',{name:'Ajustar valor da barca'});
+  assert.equal(await slider.inputValue(),'200');
+  assert.equal(await slider.getAttribute('min'),'200');
+  assert.equal(await slider.getAttribute('max'),'400');
+  await slider.fill('275');
   await click('Continuar');await p.getByLabel('Encomenda prioritária').check();
-  const name=p.getByLabel('Nome do cliente ou restaurante');
-  await name.click();const pad=p.locator('[data-ink] canvas');await pad.click();
+  await click('Escrever à mão');const pad=p.locator('[data-ink] canvas');await pad.click();
   await pad.evaluate(el=>{const ctx=el.getContext('2d');ctx.fillStyle='black';ctx.font='90px Arial';ctx.fillText('MARIA',50,145);});
   await click('Ler nome');await p.waitForFunction(()=>document.querySelector('[data-field="o.name"]').value==='MARIA',{},{timeout:45000});
 
@@ -106,6 +118,7 @@ module.exports=async function testQuestionnaire(browser,url,base){
   await click('Continuar');await click('Confirmar encomenda');await p.locator('.order-number').waitFor();
   assert.equal(submitted.at(-1).source,'equipa');assert.equal(submitted.at(-1).party_size,6);
   assert.equal(submitted.at(-1).priority,'alta');assert.equal(submitted.at(-1).customer_phone,null);
+  assert.equal(submitted.at(-1).items[0].budget,275);
   console.log('PASS: questionário do Cliente: escrita do nome, preço, levantamento, campos opcionais e rascunho');
  }finally{await context.close();}
 };

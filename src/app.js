@@ -35,6 +35,7 @@ function lineDescription(i){
 }
 
 const paths={
+ undo:'<path d="M9 5 4 10l5 5m-5-5h10a5 5 0 0 1 0 10h-3"/>',
  columns:'<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16m6-16v16"/>',
  list:'<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 8h6m-6 4h6m-6 4h4"/>',
  store:'<path d="m3 9 2-5h14l2 5m-17 1v10h16V10M3 9v1a3 3 0 0 0 5 2 3 3 0 0 0 4 0 3 3 0 0 0 4 0 3 3 0 0 0 5-2V9ZM9 20v-5h5v5"/>',
@@ -133,7 +134,7 @@ async function onlineRequest(url,data){
    try{await rest("orders?select=shellfish_avoid&limit=0");}
    catch(e){if(e.status===400)throw Error("O questionário aguarda a atualização da base de dados.");throw e;}
   }
-  const r=await rest("rpc/create_order",{payload:{customer_name:data.name.trim(),customer_type:data.type,fulfilment:data.delivery==="Entrega"?"entrega":"recolha",address:data.delivery==="Entrega"?data.address:"",scheduled_time:data.time,business_date:data.day,source:data.channel==="Cliente"?"cliente":"equipa",priority:data.priority?"alta":"normal",notes:data.note,...questionnaireFields(data),client_token:data.requestKey,items:data.items.map(i=>{const p=product(i.product);return {category:catKeys[p.cat],product:label(i),quantity:i.measure==="pieces"?Number((i.qty*i.weight).toFixed(2)):i.qty,unit:unitKeys[p.unit],cut:p.cat===1?i.cut.toLowerCase():null,barca_size:p.cat===0?({bp:"pequena",bm:"media",bg:"grande"}[i.product]):null,meal_type:p.cat===0?(i.use==="Petisco"?"petisco":"refeicao"):null,people:p.cat===0?i.people:null,budget:p.cat===0?(p.id==="bp"?Math.max(50,i.budget):i.budget):null,notes:i.measure==="pieces"?[fmtQty(i.qty)+" peças · cerca de "+fmtQty(i.weight)+" kg por peça",i.note].filter(Boolean).join("\n"):i.note};})}});
+  const r=await rest("rpc/create_order",{payload:{customer_name:data.name.trim(),customer_type:data.type,fulfilment:data.delivery==="Entrega"?"entrega":"recolha",address:data.delivery==="Entrega"?data.address:"",scheduled_time:data.time,business_date:data.day,source:data.channel==="Cliente"?"cliente":"equipa",priority:data.priority?"alta":"normal",notes:data.note,...questionnaireFields(data),client_token:data.requestKey,items:data.items.map(i=>{const p=product(i.product);return {category:catKeys[p.cat],product:label(i),quantity:i.measure==="pieces"?Number((i.qty*i.weight).toFixed(2)):i.qty,unit:unitKeys[p.unit],cut:p.cat===1?i.cut.toLowerCase():null,barca_size:p.cat===0?({bp:"pequena",bm:"media",bg:"grande"}[i.product]):null,meal_type:p.cat===0?(i.use==="Petisco"?"petisco":"refeicao"):null,people:p.cat===0?i.people:null,budget:p.cat===0?(limitBoatBudget(p.id,i.budget)):null,notes:i.measure==="pieces"?[fmtQty(i.qty)+" peças · cerca de "+fmtQty(i.weight)+" kg por peça",i.note].filter(Boolean).join("\n"):i.note};})}});
   return {order:await readOne(r.id)};
  }
  const row=rawOrders.get(url.split("/").at(-1));if(!row)throw Error("Encomenda indisponível.");
@@ -198,7 +199,6 @@ function renderSync(){
  document.querySelectorAll("[data-advance],[data-task],[data-handoff],[data-confirm],[data-quick-undo],#historyConfirm button[type=submit]").forEach(el=>{el.disabled=busy||!synced;});
  document.querySelectorAll("[data-saving]").forEach(el=>{el.textContent=el.dataset.saving===savingId?saveMessage:"";});
  const status=$("#writeStatus");status.textContent=saveMessage;
- if(undoAction&&!canUndo(findOrder(undoAction.order.id)))clearUndo();
 }
 const button=(name,text,act,extra="")=>`<button type="button" class="btn ${extra}" data-act="${act}">${name?icon(name):""}${text}</button>`;
 function header(){
@@ -252,13 +252,14 @@ function orderCard(o,n){
  ${contactActions(o)}
  ${o.note?`<p class="ticket-note">${esc(o.note)}</p>`:""}
  ${n<2?`<button class="ticket-action primary" data-advance="${o.id}">Pronta</button>`:""}
- ${n===2?`<p class="completion">${icon("check",18)} ${station==="barcas"?"Barcas concluídas":"Preparação concluída"}</p>${globalState(o)===2?`<button class="ticket-action primary" data-handoff="${o.id}">${handoffLabel(o)}</button>`:`<p class="awaiting">A aguardar ${other==="barcas"?"as Barcas":"Peixe-Marisco"}</p>`}`:""}
+ ${n===2?`<div class="ticket-completion"><p class="completion">${icon("check",18)} ${o.handed?"Entregue":station==="barcas"?"Barcas concluídas":"Preparação concluída"}</p>${canUndo(o)&&(!undoAction.target||undoAction.target===station)?`<button type="button" class="btn card-undo" data-quick-undo="${o.id}">${icon("undo",21)} Desfazer</button>`:""}</div>
+ ${o.handed?"":globalState(o)===2?`<button class="ticket-action primary" data-handoff="${o.id}">${handoffLabel(o)}</button>`:`<p class="awaiting">A aguardar ${other==="barcas"?"as Barcas":"Peixe-Marisco"}</p>`}`:""}
  ${o.tasks[other]!==undefined&&n!==2?`<p class="other-station">${stations[other]}: ${states[o.tasks[other]]}</p>`:""}
  <p class="card-save" data-saving="${o.id}"></p></article>`;
 }
 function empty(text){return `<div class="empty">${icon("bando",24)}<span>${text}</span></div>`;}
 function boardContent(){
- const shown=orders.filter(o=>!o.cancelled && !o.handed && o.tasks[station]!==undefined).sort(byTime);
+ const shown=orders.filter(o=>!o.cancelled && (!o.handed||canUndo(o)) && o.tasks[station]!==undefined).sort(byTime);
  const lanes=preparationStates.map(n=>{
   const title=states[n];
   const excluded=filter!=="all" && filter!==statusKeys[n];
@@ -298,7 +299,7 @@ async function mutate(o,action,extra={}){
  try{
  const originPage=page,deviceStation=station;
  const {order}=await request("/api/orders/"+o.id,{taskVersion:o.taskVersions[target],revision:o.revision,action,station:target,deviceStation,...extra});
- ++serial;updateOrder(order);synced=true;networkProblem=false;lastSync=Date.now();saveMessage="Alteração guardada.";render();if(dialog.open&&dialogMode==="detail")drawDetail();
+ ++serial;updateOrder(order);synced=true;networkProblem=false;lastSync=Date.now();saveMessage="Alteração guardada.";
  if(["advance","handoff"].includes(action)&&page===originPage&&station===deviceStation&&day===o.day){
   if(dialog.open)dialog.close();
   if(action==="handoff")offerUndo(order);
@@ -306,8 +307,8 @@ async function mutate(o,action,extra={}){
    offerUndo(order,target,statusKeys[o.tasks[target]]);
   }
  }
- if(action==="back"&&extra.previousStatus)notice("Voltou a Por preparar.");
- if(action==="undo"){clearUndo();notice("A encomenda voltou a Pronta.");}
+ if(action==="undo"||(action==="back"&&extra.previousStatus))clearUndo();
+ render();if(dialog.open&&dialogMode==="detail")drawDetail();
  if(action==="cancel")notice("Encomenda cancelada.");
  if(action==="reopen")notice("Encomenda reaberta.");
  }catch(e){saveMessage="Não foi possível confirmar. A atualizar o estado…";notice(e.message||"Não foi possível guardar.");busy=false;await sync();if(dialog.open&&dialogMode==="detail")drawDetail();saveMessage="Confirma o estado antes de tentar novamente.";}
@@ -318,19 +319,17 @@ const modalHead=(eyebrow,title)=>`<div class="modal-head"><div><div class="kicke
 const undoLabel=o=>o.delivery==="Entrega"?"Desfazer entrega":"Desfazer levantamento";
 let undoAction=null,undoTimer;
 function clearUndo(){
- clearTimeout(undoTimer);undoAction=null;$("#undoNotice").hidden=true;
+ clearTimeout(undoTimer);undoAction=null;
 }
 function canUndo(current){
- if(!undoAction||!current||current.cancelled||Date.now()>=undoAction.until)return false;
+ if(!undoAction||!current||current.id!==undoAction.order.id||current.cancelled||Date.now()>=undoAction.until)return false;
  const {order,target}=undoAction;
  if(target)return !current.handed&&current.tasks[target]===2&&current.taskVersions[target]===order.taskVersions[target];
  return current.handed&&current.revision===order.revision;
 }
 function offerUndo(order,target,previousStatus){
  clearUndo();undoAction={order,target,previousStatus,until:Date.now()+8000};
- const box=$("#undoNotice");
- box.querySelector("span").textContent=target?order.name+" · Marcada como pronta":order.delivery==="Entrega"?"Entrega confirmada.":"Levantamento confirmado.";
- box.hidden=false;undoTimer=setTimeout(clearUndo,8000);
+ undoTimer=setTimeout(()=>{clearUndo();rerenderResults();},8000);
 }
 let confirmOrder=null;
 function confirmHistory(o,action){
@@ -370,6 +369,7 @@ const mkKey=()=>globalThis.crypto?.randomUUID?.()||"demo-"+Date.now().toString(3
 
 const occasions={refeicao:"Refeição",evento:"Evento",petisco:"Petisco",outro:"Outro"};
 const capacities={bp:3,bm:6,bg:10};
+const boatBudgets={bp:[50,100],bm:[100,200],bg:[200,400]};
 const steps=["Pessoas","Ocasião","Marisco","Artigos","Contacto e horário","Resumo"];
 const stepTitles=["Quantas pessoas são?","Qual é a ocasião?","Que marisco prefere?","Escolha a sua barca","Quando vem levantar a barca?","A sua barca"];
 const drafts=new Map();
@@ -409,13 +409,17 @@ const preferences=(o,k)=>[...o[k],o[k+"Text"].trim()].filter(Boolean);
 function suggestedBoat(){
  return draft.party<=3?"bp":draft.party<=6?"bm":"bg";
 }
+function limitBoatBudget(id,value){
+ const [min,max]=boatBudgets[id];
+ return Math.min(max,Math.max(min,Number(value)||min));
+}
 function boatPrice(id){
- const price=Number(draft.party)*20||product(id).budget;
- return id==="bp"?Math.max(50,price):price;
+ return limitBoatBudget(id,Number(draft.party)*20||boatBudgets[id][0]);
 }
 function allItems(){
  const size=product(draft.boatChoice)?.cat===0?draft.boatChoice:suggestedBoat();
- return [{product:size,qty:1,people:Number(draft.party)||null,budget:boatPrice(size),use:draft.occasion==="petisco"?"Petisco":"Refeição",note:""},...draft.items];
+ const budget=limitBoatBudget(size,draft.adjustedBudget??boatPrice(size));
+ return [{product:size,qty:1,people:Number(draft.party)||null,budget,use:draft.occasion==="petisco"?"Petisco":"Refeição",note:""},...draft.items];
 }
 const input=(label,key,value,attrs="")=>`<label class="field"><span>${label}</span><input data-field="o.${key}" value="${esc(value)}" ${attrs}></label>`;
 function options(group,values,selected){
@@ -430,19 +434,25 @@ function shellfish(group,title){
  ${input("Outro (opcional)",group+"Text",draft[group+"Text"],'maxlength="60"')}</fieldset>`;
 }
 function articleStep(){
- const suggested=suggestedBoat(),selected=allItems()[0].product;
+ const suggested=suggestedBoat(),{product:selected,budget}=allItems()[0];
+ const [min,max]=boatBudgets[selected];
  const photos={bp:"barca_pequena.png",bm:"barca_media.png",bg:"barca_grande.png"};
  const cards=Object.keys(capacities).map(id=>`
   <button type="button" data-pick="boatChoice" data-value="${id}" aria-pressed="${selected===id}" class="${id===suggested?"suggested":""}">
    <img src="./${photos[id]}" alt="">
-   <b>${product(id).name}</b><strong>${fmtQty(boatPrice(id))} €</strong>
+   <b>${product(id).name}</b>
    ${id===suggested?"<small>Sugerida</small>":""}
   </button>`).join("");
- return `<div class="boat-options">${cards}</div><p>${draft.party?"Sugestão de 20 € por pessoa. ":""}Barca pequena a partir de 50 €.</p>`;
+ return `<p class="budget-suggestion">Valor sugerido · <strong>${fmtQty(boatPrice(selected))} €</strong></p>
+ <div class="boat-options">${cards}</div>
+ <label class="boat-budget"><span>Valor da ${product(selected).name.toLowerCase()}</span><output>${fmtQty(budget)} €</output>
+ <input type="range" data-field="o.adjustedBudget" aria-label="Ajustar valor da barca" aria-valuetext="${fmtQty(budget)} €" min="${min}" max="${max}" step="1" value="${budget}">
+ <small><span>${min} €</span><span>${max} €</span></small></label>`;
 }
 function contactStep(){
  return ` <div class="form-grid">${input("Dia","day",draft.day,`type="date" min="${dayNow()}" max="${shiftDay(dayNow(),365)}" required`)}${input("Hora","time",draft.time,'type="time" required')}</div>
- ${input("Nome do cliente ou restaurante","name",draft.name,'required maxlength="80" autocomplete="name"')}<div data-ink></div>
+ ${input("Nome do cliente ou restaurante","name",draft.name,'required maxlength="80" autocomplete="name"')}
+ <button type="button" class="btn" data-show-ink>Escrever à mão</button><div data-ink></div>
  
  ${input("Telemóvel (opcional)","phone",draft.phone,'type="tel" inputmode="tel" maxlength="40" placeholder="Número português ou +indicativo e número"')}
 
@@ -512,7 +522,8 @@ function quizClick(b){
    if(v==="none"){draft[key]=[];draft[key+"Text"]="";}
    else draft[key]=draft[key].includes(v)?draft[key].filter(x=>x!==v):[...draft[key],v];
   }else{
-   draft[key]=v;if(key==="boatChoice")delete draft.boatBudget;
+   if(key==="boatChoice"&&allItems()[0].product!==v)delete draft.adjustedBudget;
+   draft[key]=v;
    if(key==="occasion"&&v!=="outro"){nextQuizStep();return;}
   }
  }else if(b.dataset.add){
@@ -588,7 +599,7 @@ function qEditor(){
  const instructions=qinput("Instruções do artigo (opcional)","i.note",qEntry.note,'maxlength="200" placeholder="Ex. embalar em separado"');
  return `<div class="editor">${picker}
  ${(!shortcuts.includes(p.id)||qEntry.name!==p.name)?`<strong>${esc(qEntry.name||p.name)}</strong>`:""}
- ${p.cat===0?`<p class="boat-price">${icon("boat",16)} ${esc(p.size)} · Referência de ${p.budget} € em marisco por barca</p><div class="form-grid three">${qinput("N.º de barcas","i.qty",qEntry.qty,'type="number" min="1" max="9999" step="1" required')}${qinput("Pessoas por barca","i.people",qEntry.people,'type="number" min="1" max="300" step="1" required')}${qinput("Marisco por barca (€)","i.budget",qEntry.budget,`type="number" min="${p.id==="bp"?50:1}" max="10000" step="0.01" required`)}</div><label class="field"><span>Tipo de serviço</span><select data-qf="i.use">${opts(["Refeição","Petisco"].map(x=>[x,x]),qEntry.use)}</select></label>`:
+ ${p.cat===0?`<p class="boat-price">${icon("boat",16)} ${esc(p.size)} · Referência de ${p.budget} € em marisco por barca</p><div class="form-grid three">${qinput("N.º de barcas","i.qty",qEntry.qty,'type="number" min="1" max="9999" step="1" required')}${qinput("Pessoas por barca","i.people",qEntry.people,'type="number" min="1" max="300" step="1" required')}${qinput("Marisco por barca (€)","i.budget",qEntry.budget,`type="number" min="${boatBudgets[p.id][0]}" max="${boatBudgets[p.id][1]}" step="0.01" required`)}</div><label class="field"><span>Tipo de serviço</span><select data-qf="i.use">${opts(["Refeição","Petisco"].map(x=>[x,x]),qEntry.use)}</select></label>`:
  `${p.cat===1?`<div class="quiz-options" role="group" aria-label="Forma de encomendar"><button type="button" data-qmeasure="weight" aria-pressed="${qEntry.measure!=="pieces"}">Ao quilo</button><button type="button" data-qmeasure="pieces" aria-pressed="${qEntry.measure==="pieces"}">À peça</button></div>`:""}<div class="form-grid">${qinput(qEntry.measure==="pieces"?"Número de peixes":"Quantidade ("+p.unit+")","i.qty",qEntry.qty,`type="number" min="${qEntry.measure==="pieces"||p.unit==="un."?1:"0.01"}" max="9999" step="${qEntry.measure==="pieces"||p.unit==="un."?1:"0.01"}" required`)}${qEntry.measure==="pieces"?qinput("Peso aproximado por peixe (kg)","i.weight",qEntry.weight,'type="number" min="0.01" max="100" step="0.01" required'):""}</div>`}
  <details class="quiz-section"><summary>${p.cat===1?esc(qEntry.cut)+" · Alterar corte ou notas":"Notas do artigo"}</summary>${cut}${instructions}</details>
  <div class="item-actions"><button type="submit" class="btn outline">${qEdit<0?"Adicionar à encomenda":"Guardar artigo"}</button>
@@ -629,7 +640,11 @@ document.addEventListener("input",e=>{
  if(!t.closest("#quizForm")||!draft)return;
  if(t.dataset.field){const k=t.dataset.field.slice(2);draft[k]=t.type==="checkbox"?t.checked:t.value;}
  if(t.dataset.item!==undefined)draft.items[Number(t.dataset.item)][t.dataset.prop]=t.dataset.prop==="qty"?Number(t.value):t.value;
- if(t.dataset.field==="o.party"){draft.party=Number(t.value)||null;t.previousElementSibling.textContent=draft.party?partyLabel(draft.party):"Por indicar";}
+ if(t.dataset.field==="o.party"){draft.party=Number(t.value)||null;delete draft.adjustedBudget;t.previousElementSibling.textContent=draft.party?partyLabel(draft.party):"Por indicar";}
+ if(t.dataset.field==="o.adjustedBudget"){
+  const amount=fmtQty(t.value)+" €";
+  t.previousElementSibling.textContent=amount;t.setAttribute("aria-valuetext",amount);
+ }
  if(["o.likedText","o.avoidText"].includes(t.dataset.field)){
   const key=t.dataset.field==="o.likedText"?"liked":"avoid";
   t.closest("fieldset").querySelector('[data-value="none"]').setAttribute("aria-pressed",!preferences(draft,key).length);
@@ -637,11 +652,12 @@ document.addEventListener("input",e=>{
  persistDraft();
 });
 document.addEventListener("click",async event=>{
- const field=event.target.closest('#quizForm [data-field="o.name"]');
- if(!field)return;
+ const button=event.target.closest("[data-show-ink]");
+ if(!button)return;
+ const field=panel.querySelector('#quizForm [data-field="o.name"]');
  const host=panel.querySelector("[data-ink]");
  if(!host||host.childElementCount)return;
- try{const {openPad}=await import(new URL("./handwriting.js",document.baseURI).href);if(host.isConnected&&!host.childElementCount)openPad(host,field);}
+ try{const {openPad}=await import(new URL("./handwriting.js",document.baseURI).href);if(host.isConnected&&!host.childElementCount){openPad(host,field);button.hidden=true;}}
  catch{notice("Escrita à mão indisponível. Pode escrever o nome com o teclado.");}
 });
 document.addEventListener("change",e=>{
@@ -687,7 +703,7 @@ document.addEventListener("click",async e=>{
  if(b.dataset.list){listState=b.dataset.list;rerenderResults();return;}
  if(b.hasAttribute("data-quick-undo")){
   if(busy||!synced)return;
-  if(!canUndo(findOrder(undoAction?.order.id))){clearUndo();return;}
+  if(!canUndo(findOrder(b.dataset.quickUndo))){clearUndo();rerenderResults();return;}
   const {order,target,previousStatus}=undoAction;
   await mutate(order,target?"back":"undo",target?{station:target,previousStatus}:{});
   return;

@@ -101,8 +101,8 @@ async function until(fn,message){for(let i=0;i<100;i++){if(await fn())return;awa
    await until(()=>Promise.resolve(mutations===1),'one request');
    await until(async()=>await barcas.locator('#writeStatus').innerText()==='Alteração guardada.','save complete');
    await wait(500);assert.equal(mutations,1,'double tap sent one write');
-   const undoBarca=barcas.locator('#undoNotice');
-   assert.match(await undoBarca.innerText(),/Marcada como pronta/);
+   const undoBarca=card(barcas).locator('.ticket-completion');
+   assert.match(await undoBarca.innerText(),/Barcas concluídas/);
    if(process.argv.includes('--update-images'))await undoBarca.screenshot({path:resolve(root,'docs/postos/desfazer.png')});
    await undoBarca.getByRole('button',{name:'Desfazer'}).evaluate(b=>{b.click();b.click();});
    await until(async()=>await card(barcas).getByRole('button',{name:'Pronta',exact:true}).isEnabled(),'undo ready returned the card');
@@ -212,7 +212,7 @@ async function until(fn,message){for(let i=0;i<100;i++){if(await fn())return;awa
    await card(pages[1]).waitFor();
   }
   await click(pages[1],'Confirmar levantamento');
-  await until(async()=>await card(pages[1]).count()===0,'handed order removed');
+  assert.equal(await card(pages[1]).locator('[data-handoff]').count(),0);
   if(!live){
    const p=pages[1];
    await p.getByRole('button',{name:'Desfazer',exact:true}).click();
@@ -221,6 +221,7 @@ async function until(fn,message){for(let i=0;i<100;i++){if(await fn())return;awa
    const undo=p.getByRole('button',{name:'Desfazer',exact:true});
    await undo.waitFor();await wait(7000);assert.ok(await undo.isVisible());
    await undo.waitFor({state:'hidden',timeout:2000});
+   await card(p).waitFor({state:'hidden'});
    for(const device of pages){
     await device.goto(url+'/#historico');
     await device.getByRole('button',{name:'Entregues',exact:true}).click();

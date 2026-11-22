@@ -85,11 +85,10 @@ nav [data-nav],.ticket .ref,.ticket-customer,.task-btns .btn,.global .btn,.list-
 
 .list-tabs,.history-actions {display:flex;flex-wrap:wrap;gap:8px}
 .history-actions {margin-top:16px}
-.history-actions .btn,#historyConfirm select,#historyConfirm input,#undoNotice .btn {min-height:56px}
-#otherReason[hidden],#undoNotice[hidden] {display:none}
-#undoNotice {position:fixed;bottom:56px;left:50%;transform:translateX(-50%);z-index:1000;display:flex;align-items:center;gap:12px;padding:8px 12px;border-radius:8px;background:var(--navy);color:white;box-shadow:0 3px 12px #102c4126;width:max-content;max-width:94vw}
-#undoNotice .btn {background:white;color:var(--ink)}
-#undoNotice span{min-width:0;overflow-wrap:anywhere}#undoNotice .btn{flex:none}
+.history-actions .btn,#historyConfirm select,#historyConfirm input {min-height:56px}
+#otherReason[hidden],[data-show-ink][hidden] {display:none}
+.ticket-completion{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.ticket .card-undo{min-height:56px;color:#a22e22;background:#fff2ee;border:1px solid #dfaaa2}
 
 .quiz {font-size:18px}
 .quiz progress {display:block;width:100%;height:8px;accent-color:var(--navy);margin-bottom:24px}
@@ -116,7 +115,7 @@ nav [data-nav],.ticket .ref,.ticket-customer,.task-btns .btn,.global .btn,.list-
 #loginPanel h1 {margin:0 0 24px}
 #loginPanel input,#loginPanel button,#signOut {min-height:56px}
 #loginPanel button {width:100%;justify-content:center}
-.session-locked #main,.session-locked nav,.session-locked #networkStatus,.session-locked #dialog,.session-locked #undoNotice,.session-locked #writeStatus,.session-locked #toast,#signOut[hidden],#loginPanel[hidden] {display:none}
+.session-locked #main,.session-locked nav,.session-locked #networkStatus,.session-locked #dialog,.session-locked #writeStatus,.session-locked #toast,#signOut[hidden],#loginPanel[hidden] {display:none}
 .station-header .btn.primary.new-order{min-height:64px;padding:12px 18px;background:var(--navy);border-color:var(--navy);font-size:18px;gap:10px}
 .party-options{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-bottom:20px}
 .party-options button{display:grid;place-content:center;gap:2px;min-height:76px;border:1px solid var(--line);border-radius:8px;background:#f4f7f8;color:var(--ink)}
@@ -147,3 +146,10 @@ nav [data-nav],.ticket .ref,.ticket-customer,.task-btns .btn,.global .btn,.list-
  object-fit:cover;object-position:center 58%;mix-blend-mode:multiply
 }
 .boat-options small{position:absolute;bottom:8px;color:#784800;font-weight:700}
+.budget-suggestion{margin:0 0 12px;color:var(--navy)}
+.budget-suggestion strong{font-size:27px}
+.boat-budget{display:grid;grid-template-columns:1fr auto;align-items:center;gap:4px 8px;margin-top:18px}
+.boat-budget output{font-size:28px;font-weight:750}
+.boat-budget input{grid-column:1/-1;width:100%;height:56px;margin:0;accent-color:var(--navy);cursor:pointer}
+.boat-budget small{grid-column:1/-1;display:flex;justify-content:space-between;color:var(--muted)}
+[data-show-ink]{margin-bottom:12px}
