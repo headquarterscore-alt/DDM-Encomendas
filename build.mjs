@@ -15,6 +15,13 @@ const files = readdirSync(src, { recursive: true, withFileTypes: true })
 
 rmSync(dist, { recursive: true, force: true });
 cpSync(src, dist, { recursive: true });
+// O reconhecimento é carregado apenas quando se escreve o nome à mão.
+for(const [source,target] of [
+ ['tesseract.js/dist/worker.min.js','worker.min.js'],
+ ['tesseract.js-core/tesseract-core-lstm.wasm.js','core.wasm.js'],
+ ['@tesseract.js-data/por/4.0.0_best_int/por.traineddata.gz','por.traineddata.gz']
+])cpSync(resolve(project,'node_modules',source),resolve(dist,'ocr',target));
+await build({entryPoints:[resolve(src,'handwriting.js')],bundle:true,format:'esm',minify:true,outfile:resolve(dist,'handwriting.js')});
 const template = readFileSync(resolve(project, 'service-worker.template.js'), 'utf8');
 const hash = createHash('sha256').update(template);
 for (const file of files) {
@@ -47,7 +54,7 @@ const version = 'ddm-postos-' + hash.digest('hex').slice(0, 14);
 must(template, '__DDM_CACHE__');
 must(template, '"__DDM_ASSETS__"');
 const worker = template.replace('__DDM_CACHE__', version)
-  .replace('"__DDM_ASSETS__"', () => JSON.stringify(files.filter(file => file !== 'index.html')));
+  .replace('"__DDM_ASSETS__"', () => JSON.stringify(files.filter(file => !["index.html","handwriting.js"].includes(file))));
 writeFileSync(resolve(dist, 'sw.js'), worker);
 writeFileSync(resolve(dist, 'index.html'), page);
 console.log('App preparada em dist/ (' + version + ').');

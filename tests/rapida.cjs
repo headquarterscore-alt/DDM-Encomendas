@@ -102,7 +102,7 @@ module.exports=async function testQuick(browser,url,base){
 
   // O separador Cliente continua a abrir o questionário de 6 passos.
   await p.goto(url+'/#cliente');
-  await p.getByLabel('Outro número de pessoas',{exact:true}).waitFor();
+  await p.getByRole('slider').waitFor();
   assert.equal(await p.locator('#quizForm').count(),1);
   console.log('PASS: Nova encomenda em Peixe-Marisco, artigos habituais, catálogo, rascunho, entrega e telemóvel estrangeiro');
  }finally{await context.close();}

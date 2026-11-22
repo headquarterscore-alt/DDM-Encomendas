@@ -91,7 +91,7 @@ async function until(fn,message){for(let i=0;i<100;i++){if(await fn())return;awa
    assert.equal(await p.locator('[data-clock]').innerText(),expected);
   }
   assert.match(await card(bancada).innerText(),new RegExp('Robalo[\\s\\S]*2,5 kg[\\s\\S]*Em filetes[\\s\\S]*Dourada[\\s\\S]*4 '+(live?'kg':'un\\.')+'[\\s\\S]*Amanhado'));
-  assert.match(await card(barcas).innerText(),/19:30[\s\S]*Barca média[\s\S]*6 pessoas[\s\S]*75 × 24 cm/);
+  assert.match(await card(barcas).innerText(),/100 €[\s\S]*Barca média/);
   assert.equal(await card(bancada).getByText('Barca média',{exact:true}).count(),0);
   const click=async(p,text)=>{await card(p).getByRole('button',{name:text,exact:true}).click();await until(async()=>await p.locator('#writeStatus').innerText()==='Alteração guardada.','mutation was not confirmed: '+text);};
   if(!live){
@@ -145,9 +145,9 @@ async function until(fn,message){for(let i=0;i<100;i++){if(await fn())return;awa
   assert.equal(await card(barcas).getByRole('button',{name:'Confirmar levantamento',exact:true}).count(),0);
   assert.equal(await card(bancada).getByRole('button',{name:'Confirmar levantamento',exact:true}).count(),0);
   // Also check the complete-order detail, not only the board.
-  await card(barcas).locator('.ref').click();assert.equal(await barcas.locator('[data-task="handoff"]').count(),0);await barcas.getByRole('button',{name:'Fechar',exact:true}).click();
+  await card(barcas).locator('.ticket-customer').click();assert.equal(await barcas.locator('[data-task="handoff"]').count(),0);await barcas.getByRole('button',{name:'Fechar',exact:true}).click();
   if(!live){
-   await card(bancada).locator('.ref').click();
+   await card(bancada).locator('.ticket-customer').click();
    await bancada.getByRole('button',{name:'Cancelar encomenda'}).click();
    await bancada.getByLabel('Motivo',{exact:true}).selectOption('Outro');
    await bancada.locator('#otherReason input').fill('Pedido repetido por telefone');
@@ -205,7 +205,7 @@ async function until(fn,message){for(let i=0;i<100;i++){if(await fn())return;awa
    fixture.fulfilment='entrega';
    await pages[0].reload();
    await card(pages[0]).getByRole('button',{name:'Confirmar entrega',exact:true}).waitFor();
-   await card(pages[0]).locator('.ref').click();
+   await card(pages[0]).locator('.ticket-customer').click();
    assert.equal(await pages[0].locator('[data-task="handoff"]').innerText(),'Confirmar entrega');
    fixture.fulfilment='recolha';
    await pages[1].reload();
