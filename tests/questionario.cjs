@@ -24,9 +24,10 @@ module.exports=async function testQuestionnaire(browser,url,base){
  const p=await context.newPage(),button=name=>p.getByRole('button',{name,exact:true}),click=name=>button(name).click();
  try{
   for(const [idx,occasion] of ['Refeição','Evento','Petisco','Outro'].entries()){
-   const team=idx%2===1,delivery=idx<2,fishOnly=idx===1;
-   await p.goto(url+(team?'/#encomendas/bancada':'/#cliente'));
-   if(team)await click('Nova encomenda');
+   const delivery=idx<2,fishOnly=idx===1;
+   await p.goto(url+'/#cliente');
+   // A 1.ª vez abre sozinho ao entrar no separador. Depois, o cliente carrega em «Começar encomenda».
+   if(idx>0)await click('Começar encomenda');
    assert.equal(await p.getByLabel('Número de pessoas',{exact:true}).inputValue(),'1');
    await p.getByLabel('Número de pessoas',{exact:true}).fill('12');await click('Continuar');
    await click(occasion);
@@ -50,8 +51,7 @@ module.exports=async function testQuestionnaire(browser,url,base){
    await p.getByLabel('Nome do cliente ou restaurante').fill('TESTE LOCAL');
    await p.getByLabel('Hora',{exact:true}).fill('00:00');
    await p.getByLabel('Dia',{exact:true}).fill(new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Lisbon'}).format(new Date()));
-   assert.equal(await p.getByLabel('Encomenda prioritária').count(),team?1:0);
-   if(team)await p.getByLabel('Encomenda prioritária').check();
+   assert.equal(await p.getByLabel('Encomenda prioritária').count(),0);
    await p.getByLabel('Telemóvel',{exact:true}).fill('123');await click('Continuar');
    assert.match(await p.locator('#quizError').innerText(),/9 dígitos/);
    const phone=['+44 7700 900123','+351 900 000 000','900000000','+1 (202) 555-0143'][idx];
@@ -69,7 +69,7 @@ module.exports=async function testQuestionnaire(browser,url,base){
    assert.equal(data.customer_phone,['+447700900123','+351900000000','+351900000000','+12025550143'][idx]);
    assert.equal(data.fulfilment,delivery?'entrega':'recolha');
    assert.equal(data.address,delivery?'Morada de teste':'');
-   assert.equal(data.priority,team?'alta':'normal');
+   assert.equal(data.priority,'normal');
    assert.equal(data.occasion,['refeicao','evento','petisco','outro'][idx]);
    assert.equal(data.occasion_other,idx===3?'Aniversário':null);
    assert.deepEqual(data.shellfish_avoid,['Ostras']);
@@ -77,7 +77,7 @@ module.exports=async function testQuestionnaire(browser,url,base){
    const boats=data.items.filter(i=>i.category==='barcas');
    assert.equal(boats.reduce((n,i)=>n+i.quantity*i.people,0),fishOnly?0:12);
    assert.ok(boats.every(i=>i.meal_type===(idx===2?'petisco':'refeicao')));
-   assert.equal(await p.evaluate(scope=>Object.keys(localStorage).find(k=>k.startsWith('ddm-questionario-2-')&&k.endsWith('-'+scope))||null,team?'Equipa':'Cliente'),null);
+   assert.equal(await p.evaluate(scope=>Object.keys(localStorage).find(k=>k.startsWith('ddm-questionario-2-')&&k.endsWith('-'+scope))||null,'Cliente'),null);
    await click('Concluir');
   }
   await p.goto(url+'/#encomendas/bancada');
@@ -85,6 +85,6 @@ module.exports=async function testQuestionnaire(browser,url,base){
   assert.match(await card.innerText(),/Marisco a evitar.*Ostras/s);
   assert.equal(await card.getByRole('link',{name:'Ligar ao cliente'}).getAttribute('href'),'tel:+447700900123');
   await card.locator('.ref').click();assert.match(await p.locator('#dialog').innerText(),/Ostras/);
-  console.log('PASS: quatro ocasiões, modos Cliente e Equipa, entrega e levantamento, só peixe, telemóvel, rascunho e contacto no posto');
+  console.log('PASS: questionário do Cliente: quatro ocasiões, entrega e levantamento, só peixe, telemóvel, rascunho e contacto no posto');
  }finally{await context.close();}
 };

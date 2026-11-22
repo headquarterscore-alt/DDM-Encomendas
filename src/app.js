@@ -82,7 +82,7 @@ function showSession(next){
  $("#loginPanel").hidden=!!next;$("#signOut").hidden=!next;
  if(previous===next?.user.id)return;
  sessionEpoch++;serial++;fetchDay=null;orders=[];rawOrders.clear();refs.clear();loaded=false;synced=false;networkProblem=false;
- drafts.clear();draft=null;detailId=null;saveMessage="";savingId=null;clearUndo();lastSync=0;
+ drafts.clear();draft=null;quick=null;qEntry=null;detailId=null;saveMessage="";savingId=null;clearUndo();lastSync=0;
  if(dialog.open)dialog.close();panel.replaceChildren();main.replaceChildren();
  $("#networkStatus").hidden=true;$("#writeStatus").textContent="";$("#toast").classList.remove("on");
  if(next)route();
@@ -109,6 +109,13 @@ function convertRow(o){
  return {id,revision:o.history_version??0,cancelled:o.status==="cancelada",phone:normalizedPhone(o.customer_phone||o.notes?.match(/(?:^|\n)Contacto: ([^\n]+)/)?.[1]),avoid:o.shellfish_avoid||[],liked:o.shellfish_preferred||[],occasion:o.occasion,occasionOther:o.occasion_other,party:o.party_size,reason:o.cancel_reason,version:o.station_tasks.reduce((s,t)=>s+t.version,0),name:o.customer_name,type:o.customer_type,day:o.business_date,time:o.scheduled_time.slice(0,5),delivery:o.fulfilment==="entrega"?"Entrega":"Levantamento",address:o.address,priority:o.priority!=="normal",note:o.notes,channel:o.source==="cliente"?"Cliente":"Equipa",handed:o.status==="entregue",items,tasks};
 }
 async function readOne(uuid){const rows=await rest("orders?select=*,station_tasks(*),order_items(*)&id=eq."+encodeURIComponent(uuid));return convertRow(rows[0]);}
+// O formulário rápido da equipa não tem estes campos. Omiti-los mantém o formato antigo da RPC,
+// que continua a aceitar encomendas sem ocasião, pessoas nem marisco.
+function questionnaireFields(data){
+ const phone=normalizedPhone(data.phone);
+ if(data.party===undefined)return phone?{customer_phone:phone}:{};
+ return {customer_phone:phone,party_size:Number(data.party),occasion:data.occasion,occasion_other:data.occasion==="outro"?data.occasionOther.trim():null,shellfish_preferred:preferences(data,"liked"),shellfish_avoid:preferences(data,"avoid")};
+}
 async function onlineRequest(url,data){
  if(!data){
   const day=new URL(url,"https://demo.invalid").searchParams.get("day");
@@ -121,7 +128,7 @@ async function onlineRequest(url,data){
    try{await rest("orders?select=shellfish_avoid&limit=0");}
    catch(e){if(e.status===400)throw Error("O questionário aguarda a atualização da base de dados.");throw e;}
   }
-  const r=await rest("rpc/create_order",{payload:{customer_name:data.name.trim(),customer_type:data.type,fulfilment:data.delivery==="Entrega"?"entrega":"recolha",address:data.delivery==="Entrega"?data.address:"",scheduled_time:data.time,business_date:data.day,source:data.channel==="Cliente"?"cliente":"equipa",priority:data.priority?"alta":"normal",notes:data.note,customer_phone:normalizedPhone(data.phone),party_size:Number(data.party),occasion:data.occasion,occasion_other:data.occasion==="outro"?data.occasionOther.trim():null,shellfish_preferred:preferences(data,"liked"),shellfish_avoid:preferences(data,"avoid"),client_token:data.requestKey,items:data.items.map(i=>{const p=product(i.product);return {category:catKeys[p.cat],product:p.name,quantity:i.qty,unit:unitKeys[p.unit],cut:p.cat===1?i.cut.toLowerCase():null,barca_size:p.cat===0?({bp:"pequena",bm:"media",bg:"grande"}[i.product]):null,meal_type:p.cat===0?(i.use==="Petisco"?"petisco":"refeicao"):null,people:p.cat===0?i.people:null,budget:p.cat===0?i.budget:null,notes:i.note};})}});
+  const r=await rest("rpc/create_order",{payload:{customer_name:data.name.trim(),customer_type:data.type,fulfilment:data.delivery==="Entrega"?"entrega":"recolha",address:data.delivery==="Entrega"?data.address:"",scheduled_time:data.time,business_date:data.day,source:data.channel==="Cliente"?"cliente":"equipa",priority:data.priority?"alta":"normal",notes:data.note,...questionnaireFields(data),client_token:data.requestKey,items:data.items.map(i=>{const p=product(i.product);return {category:catKeys[p.cat],product:p.name,quantity:i.qty,unit:unitKeys[p.unit],cut:p.cat===1?i.cut.toLowerCase():null,barca_size:p.cat===0?({bp:"pequena",bm:"media",bg:"grande"}[i.product]):null,meal_type:p.cat===0?(i.use==="Petisco"?"petisco":"refeicao"):null,people:p.cat===0?i.people:null,budget:p.cat===0?i.budget:null,notes:i.note};})}});
   return {order:await readOne(r.id)};
  }
  const row=rawOrders.get(url.split("/").at(-1));if(!row)throw Error("Encomenda indisponível.");
@@ -193,7 +200,7 @@ const button=(name,text,act,extra="")=>`<button type="button" class="btn ${extra
 function header(){
  const client=page==="cliente",list=page==="historico";
  const title=client?"Cliente":list?"Histórico":stations[station];
- return `<div class="pagehead station-header"><h1>${title}</h1><div class="header-date">${icon("calendar",30)}<span data-today></span></div><div class="header-clock" aria-label="Hora atual em Lisboa">${icon("clock",34)}<time data-clock></time></div><div class="head-actions"><span class="sync" role="status"></span>${!client&&!list?`<button class="btn square" title="${focusMode?"Sair do modo posto":"Modo posto em ecrã inteiro"}" aria-label="${focusMode?"Sair do modo posto":"Modo posto em ecrã inteiro"}" data-act="focus">${icon(focusMode?"shrink":"expand",30)}</button>`:""}${client?"":button("plus","Nova encomenda","new","primary")}</div></div>`;
+ return `<div class="pagehead station-header"><h1>${title}</h1><div class="header-date">${icon("calendar",30)}<span data-today></span></div><div class="header-clock" aria-label="Hora atual em Lisboa">${icon("clock",34)}<time data-clock></time></div><div class="head-actions"><span class="sync" role="status"></span>${!client&&!list?`<button class="btn square" title="${focusMode?"Sair do modo posto":"Modo posto em ecrã inteiro"}" aria-label="${focusMode?"Sair do modo posto":"Modo posto em ecrã inteiro"}" data-act="focus">${icon(focusMode?"shrink":"expand",30)}</button>`:""}${client?"":`<button type="button" class="btn primary new-plus" data-act="new" aria-label="Nova encomenda" title="Nova encomenda">${icon("plus",40)}</button>`}</div></div>`;
 }
 function updateClock(){
  const now=new Date();
@@ -370,7 +377,7 @@ function persistDraft(){
 }
 function startOrder(){
  if(!teamSession)return;
- const scope=page==="cliente"?"Cliente":"Equipa";
+ const scope="Cliente";
  let saved=drafts.get(scope);
  try{
   const oldKey="ddm-questionario-1-"+scope;
@@ -451,7 +458,7 @@ function contactStep(){
  ${input("Telemóvel","phone",draft.phone,'type="tel" inputmode="tel" required maxlength="40" placeholder="Número português ou +indicativo e número"')}
  <p>Usamos o nome e o telemóvel só para esta encomenda.</p>
  ${input("Notas (opcional)","note",draft.note,'maxlength="600"')}
- ${draft.channel==="Equipa"?`<label class="checkfield"><input data-field="o.priority" type="checkbox" ${draft.priority?"checked":""}>Encomenda prioritária</label>`:""}`;
+`;
 }
 const partyLabel=n=>fmtQty(n)+" "+(Number(n)===1?"pessoa":"pessoas");
 function review(){
@@ -532,8 +539,61 @@ async function submitOrder(){
  dialogMode="success";panel.innerHTML=modalHead("ENCOMENDA REGISTADA","Encomenda confirmada")+`<div class="modal-body success"><strong class="order-number">${esc(code(o.id))}</strong><p>${esc(o.delivery)} · ${esc(o.day)} às ${esc(o.time)}</p>${button("check","Concluir","close","primary")}</div>`;render();await sync();
  }catch(e){hadFormError=e.message||"Não foi possível registar o pedido.";busy=false;drawForm();dialog.scrollTop=0;}finally{busy=false;}
 }
+// Formulário rápido da equipa: um ecrã para os artigos e outro para o cliente e a hora.
+// O questionário de 6 passos é só do separador Cliente. Os dois partilham a criação (/api/orders).
+let quick=null,qEntry=null,qEdit=-1,qStep=1,qError="";
+const opts=(items,v)=>items.map(([id,t])=>`<option value="${esc(id)}" ${String(v)===String(id)?"selected":""}>${esc(t)}</option>`).join("");
+const qinput=(label,key,value,attrs="")=>`<label class="field"><span>${label}</span><input data-qf="${key}" value="${esc(value)}" ${attrs}></label>`;
+function qDefault(id){const p=product(id);return {product:id,qty:1,cut:p.cat===1?cuts[0]:"",people:p.cat===0?capacities[p.id]||3:1,use:"Refeição",budget:p.budget||0,note:""};}
+function startQuick(){
+ if(!teamSession)return;
+ if(!quick){
+  const t=new Date(Date.now()+3600000);
+  quick={requestKey:mkKey(),channel:"Equipa",name:"",phone:"",type:"particular",delivery:"Levantamento",address:"",
+   day:day>lisbonDay(t)?day:lisbonDay(t),time:new Intl.DateTimeFormat("en-GB",{timeZone:"Europe/Lisbon",hour:"2-digit",minute:"2-digit",hourCycle:"h23"}).format(t),note:"",priority:false,items:[]};
+  qStep=1;
+ }
+ qError="";qEdit=-1;
+ qEntry=qDefault(catalog.find(p=>p.cat===(page==="encomendas"&&station==="bancada"?1:0)).id);
+ openDialog("order");drawQuick();
+}
+function qEditor(){
+ const p=product(qEntry.product);
+ return `<div class="editor"><div class="form-grid"><label class="field"><span>Categoria</span><select id="qCategory">${opts(categories.map((t,n)=>[n,t]),p.cat)}</select></label><label class="field"><span>Produto</span><select id="qProduct">${opts(catalog.filter(x=>x.cat===p.cat).map(x=>[x.id,x.name]),p.id)}</select></label></div>
+ ${p.cat===0?`<p class="boat-price">${icon("boat",16)} ${esc(p.size)} · Referência de ${p.budget} € em marisco por barca</p><div class="form-grid three">${qinput("N.º de barcas","i.qty",qEntry.qty,'type="number" min="1" max="9999" step="1" required')}${qinput("Pessoas por barca","i.people",qEntry.people,'type="number" min="1" max="300" step="1" required')}${qinput("Marisco por barca (€)","i.budget",qEntry.budget,'type="number" min="1" max="10000" step="0.01" required')}</div><label class="field"><span>Tipo de serviço</span><select data-qf="i.use">${opts(["Refeição","Petisco"].map(x=>[x,x]),qEntry.use)}</select></label>`:
+ `<div class="form-grid">${qinput("Quantidade ("+p.unit+")","i.qty",qEntry.qty,`type="number" min="${p.unit==="un."?1:"0.01"}" max="9999" step="${p.unit==="un."?1:"0.01"}" required`)}${p.cat===1?`<label class="field"><span>Preparação</span><select data-qf="i.cut">${opts(cuts.map(x=>[x,x]),qEntry.cut)}</select></label>`:""}</div>`}
+ ${qinput("Instruções do artigo (opcional)","i.note",qEntry.note,'maxlength="200" placeholder="Ex. embalar em separado"')}
+ <button type="submit" class="btn outline">${icon(qEdit<0?"plus":"check",16)}${qEdit<0?"Adicionar à encomenda":"Guardar artigo"}</button>${qEdit>=0?'<button type="button" class="btn minor" data-qact="canceledit">Cancelar edição</button>':""}</div>`;
+}
+function drawQuick(){
+ if(!quick)return;
+ const cart=quick.items.map((i,k)=>`<div class="cart-row"><div><strong>${esc(label(i))} ${product(i.product).cat===0&&i.qty>1?"× "+fmtQty(i.qty):""}</strong><small>${esc(lineDescription(i))}</small></div><button type="button" class="textbtn" data-qedit="${k}">Editar</button><button type="button" class="close" data-qremove="${k}" aria-label="Remover ${esc(label(i))}">${icon("trash",16)}</button></div>`).join("")||"<p>Adicione o primeiro artigo para continuar.</p>";
+ panel.innerHTML=modalHead("EQUIPA","Nova encomenda")+`<div class="modal-body"><div class="steps"><span class="${qStep===1?"current":""}">1 &nbsp; Artigos</span><span class="${qStep===2?"current":""}">2 &nbsp; Cliente e horário</span></div>${qError?`<div class="error" role="alert">${esc(qError)}</div>`:""}
+ ${qStep===1?`<form id="qItemForm">${qEditor()}</form><div class="cart-title"><strong>Artigos na encomenda</strong><span class="total">${quick.items.length}</span></div><div class="cart-lines">${cart}</div><div class="form-foot">${button("","Fechar","close","minor")}<button type="button" data-qact="next" class="btn primary" ${quick.items.length&&qEdit<0?"":"disabled"}>Continuar</button></div>`:
+ `<form id="qOrderForm"><div class="form-grid">${qinput("Nome do cliente ou restaurante","o.name",quick.name,'maxlength="80" required autocomplete="name"')}<label class="field"><span>Cliente</span><select data-qf="o.type">${opts([["particular","Particular"],["restaurante","Restaurante"]],quick.type)}</select></label></div>
+ <div class="form-grid">${qinput("Telemóvel (opcional)","o.phone",quick.phone,'type="tel" maxlength="25" autocomplete="off" placeholder="9 dígitos ou +indicativo"')}<label class="field"><span>Modalidade</span><select data-qf="o.delivery">${opts(["Levantamento","Entrega"].map(x=>[x,x]),quick.delivery)}</select></label></div>
+ ${quick.delivery==="Entrega"?qinput("Morada de entrega","o.address",quick.address,'maxlength="200" autocomplete="street-address" required'):""}
+ <div class="form-grid">${qinput("Dia","o.day",quick.day,`type="date" min="${dayNow()}" max="${shiftDay(dayNow(),365)}" required`)}${qinput("Hora pretendida","o.time",quick.time,'type="time" required')}</div><label class="field"><span>Notas de preparação (opcional)</span><textarea data-qf="o.note" maxlength="600" rows="2">${esc(quick.note)}</textarea></label><label class="checkfield"><input type="checkbox" data-qf="o.priority" ${quick.priority?"checked":""}> Encomenda prioritária</label>
+ <div class="summary"><strong>${quick.items.length===1?"1 artigo":quick.items.length+" artigos"}</strong><span>${esc(quick.items.map(i=>label(i)).join(" · "))}</span></div>
+ <div class="form-foot"><button type="button" class="btn minor" data-qact="prev">Voltar aos artigos</button><button type="submit" class="btn primary" ${busy?"disabled":""}>${icon("check",16)}${busy?"A registar…":"Confirmar encomenda"}</button></div></form>`}</div>`;
+}
+async function submitQuick(){
+ if(busy||!quick)return;
+ if(quick.phone.trim()&&!normalizedPhone(quick.phone)){qError="Telemóvel inválido. Use 9 dígitos ou + e o indicativo, ou deixe em branco.";drawQuick();return;}
+ if(quick.day<dayNow()||quick.day>shiftDay(dayNow(),365)){qError="Escolha uma data válida para a encomenda.";drawQuick();return;}
+ const pending=quick;busy=true;qError="";drawQuick();
+ try{
+  const {order:o}=await request("/api/orders",pending);
+  if(quick!==pending)return;
+  quick=null;qEntry=null;qStep=1;
+  if(day!==o.day){day=o.day;orders=[];loaded=false;}
+  updateOrder(o);
+  dialogMode="success";panel.innerHTML=modalHead("ENCOMENDA REGISTADA","Encomenda confirmada")+`<div class="modal-body success"><strong class="order-number">${esc(code(o.id))}</strong><p>${esc(o.delivery)} · ${esc(o.day)} às ${esc(o.time)}</p>${button("check","Concluir","close","primary")}</div>`;render();await sync();
+ }catch(e){qError=e.message||"Não foi possível registar o pedido.";busy=false;drawQuick();dialog.scrollTop=0;}finally{busy=false;}
+}
 document.addEventListener("input",e=>{
  const t=e.target;
+ if(quick&&t.dataset.qf&&t.closest("#qItemForm,#qOrderForm")){const [who,k]=t.dataset.qf.split(".");(who==="i"?qEntry:quick)[k]=t.type==="checkbox"?t.checked:t.value;return;}
  if(!t.closest("#quizForm")||!draft)return;
  if(t.dataset.field){const k=t.dataset.field.slice(2);draft[k]=t.type==="checkbox"?t.checked:t.value;}
  if(t.dataset.item!==undefined)draft.items[Number(t.dataset.item)][t.dataset.prop]=t.dataset.prop==="qty"?Number(t.value):t.value;
@@ -547,6 +607,8 @@ document.addEventListener("change",e=>{
  const t=e.target;
  if(t.id==="cancelReason"){const other=$("#otherReason");other.hidden=t.value!=="Outro";other.querySelector("input").required=!other.hidden;return;}
  if(t.id==="orderDay"){setDay(t.value);return;}
+ if(quick&&(t.id==="qCategory"||t.id==="qProduct")){qEntry=qDefault(t.id==="qProduct"?t.value:catalog.find(p=>p.cat===+t.value).id);drawQuick();return;}
+ if(quick&&t.dataset.qf==="o.delivery"){quick.delivery=t.value;drawQuick();return;}
 
 });
 document.addEventListener("submit",e=>{
@@ -557,6 +619,14 @@ document.addEventListener("submit",e=>{
   if(action==="cancel"&&!reason){notice("Indique um motivo.");return;}
   dialogMode="detail";drawDetail();mutate(confirmOrder,action,{reason});return;
  }
+ if(e.target.id==="qItemForm"&&quick){
+  e.preventDefault();
+  if(qEdit<0&&quick.items.length>=50){notice("Máximo de 50 artigos por encomenda.");return;}
+  const p=product(qEntry.product),item={...qEntry,qty:Number(qEntry.qty),people:Number(qEntry.people),budget:Number(qEntry.budget)};
+  if(qEdit>=0)quick.items[qEdit]=item;else quick.items.push(item);
+  qEdit=-1;qEntry=qDefault(p.id);drawQuick();notice("Artigo guardado na encomenda.");return;
+ }
+ if(e.target.id==="qOrderForm"&&quick){e.preventDefault();submitQuick();return;}
  if(e.target.id==="quizForm"){
   e.preventDefault();if(busy)return;
   hadFormError=quizError();if(hadFormError){$("#quizError").textContent=hadFormError;return;}
@@ -579,9 +649,17 @@ document.addEventListener("click",async e=>{
  if(b.dataset.advance){await mutate(findOrder(b.dataset.advance),"advance",{station:b.dataset.s||station});return;}
  if(b.dataset.handoff){await mutate(findOrder(b.dataset.handoff),"handoff");return;}
  if(b.dataset.task){await mutate(findOrder(detailId),b.dataset.task,{station:b.dataset.s||station});return;}
+ if(quick&&b.dataset.qedit!==undefined){qEdit=+b.dataset.qedit;qEntry={...quick.items[qEdit]};drawQuick();dialog.scrollTop=0;return;}
+ if(quick&&b.dataset.qremove!==undefined){quick.items.splice(+b.dataset.qremove,1);qEdit=-1;qEntry=qDefault(qEntry.product);drawQuick();return;}
+ if(quick&&b.dataset.qact){
+  const a=b.dataset.qact;
+  if(a==="canceledit"){qEdit=-1;qEntry=qDefault(qEntry.product);drawQuick();return;}
+  if(a==="next"&&!quick.items.length)return;
+  qStep=a==="next"?2:1;qError="";drawQuick();dialog.scrollTop=0;return;
+ }
  if(b.closest("#quizForm")&&b.type==="button"){quizClick(b);return;}
  const act=b.dataset.act;
- if(act==="new")startOrder();
+ if(act==="new")page==="cliente"?startOrder():startQuick();
  if(act==="close"&&!busy)dialog.close();
  if(act==="focus"){focusMode=!focusMode;try{localStorage.setItem("ddm-modo-posto",String(focusMode))}catch{}document.body.classList.toggle("focus",focusMode);render();try{if(focusMode&&!document.fullscreenElement)await document.documentElement.requestFullscreen();else if(!focusMode&&document.fullscreenElement)await document.exitFullscreen();}catch{}}
 });

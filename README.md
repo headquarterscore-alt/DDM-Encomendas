@@ -39,11 +39,13 @@ Antes de publicar este fluxo, rever e aprovar [a alteração de update_task](mig
 
 As ações ficam bloqueadas durante a gravação ou sem ligação. A confirmação **Alteração guardada** só aparece após a resposta da base e a leitura do estado guardado. Se houver erro, a app atualiza a encomenda e pede para confirmar o estado antes de repetir.
 
-## Questionário de encomenda
+## Duas formas de encomendar
 
-O separador **Cliente** e a ação **Nova encomenda** da equipa usam os mesmos seis passos. Nos dois modos é possível escolher levantamento ou entrega com morada, dia e hora. A equipa também pode marcar prioridade. **Não quero barca** permite avançar só com artigos do catálogo.
+**Equipa: botão «+» verde** (nos postos). Abre o formulário rápido de dois ecrãs: artigos e depois cliente e hora. Levantamento ou entrega com morada, prioridade, e telemóvel opcional (se for preenchido tem de ser válido). Não envia ocasião, pessoas nem marisco, por isso a base recebe o formato antigo de `create_order`.
 
-O rascunho fica guardado no navegador por modo, incluindo ao fechar e reabrir. A confirmação limpa o rascunho desse modo. O número apresentado no fim identifica a encomenda. Os postos mostram o marisco a evitar e o contacto, com destaque quando passa a hora prevista.
+**Separador Cliente: questionário de seis passos**, para o cliente responder sozinho ou com a equipa ao lado. Inclui ocasião, marisco que prefere e que não pode comer, e telemóvel obrigatório. Levantamento ou entrega com morada, dia e hora. **Não quero barca** permite avançar só com artigos do catálogo.
+
+O rascunho do questionário fica guardado no navegador, incluindo ao fechar e reabrir. O do formulário rápido fica só em memória. Em ambos, a confirmação limpa o rascunho. O número apresentado no fim identifica a encomenda. Os postos mostram o marisco a evitar e o contacto, com destaque quando passa a hora prevista.
 
 Rever [003_questionario.sql](migrations/003_questionario.sql) antes da publicação e aplicar após aprovação. A ocasião da encomenda pode ser Refeição, Evento, Petisco ou Outro. O tipo de serviço do artigo continua limitado a Refeição ou Petisco. O mesmo `client_token` permite repetir uma submissão se a ligação falhar.
 
