@@ -1,7 +1,7 @@
 // Two independent browser contexts share only the server, never localStorage.
 const {chromium}=require('playwright');
 const {createServer}=require('node:http');
-const {readFileSync,mkdirSync}=require('node:fs');
+const {readFileSync,mkdirSync,existsSync}=require('node:fs');
 const {resolve}=require('node:path');
 const assert=require('node:assert/strict');
 const live=process.argv.includes('--live');
@@ -243,6 +243,7 @@ async function until(fn,message){for(let i=0;i<100;i++){if(await fn())return;awa
   }
   if(!live)await require("./questionario.cjs")(browser,url,base);
   if(!live)await require("./rapida.cjs")(browser,url,base);
+  if(!live&&existsSync(resolve(root,"dist/experimentar.html")))await require("./recebidos.cjs")(browser,url);
   assert.deepEqual(errors,[]);
   console.log('PASS: independent sessions, mixed order, per-product quantities, simplified workflow, filters, handoff gate, device persistence, 56px targets'+(!live?', repeated taps, failed save, offline/reconnect':''));
  }finally{await browser.close();server.close();}

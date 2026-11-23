@@ -53,7 +53,8 @@ if(branch==='feat/folha-balcao'||process.argv.includes('--preview-folha')){
   plugins:[{name:'isolated-session',setup(builder){
    builder.onResolve({filter:/team-auth\.js$/},()=>({path:resolve(project,'preview/folha-session.js')}));
   }}]});
- let review=read('index.html').replace(cssTag,()=>'<style>'+read('estilo.css')+'</style>').replaceAll('./marca.png',logo)
+ const inboxCss=readFileSync(resolve(project,'preview/recebidos.css'),'utf8');
+ let review=read('index.html').replace(cssTag,()=>'<style>'+read('estilo.css')+inboxCss+'</style>').replaceAll('./marca.png',logo)
   .replace('<script type="module" src="./install.js"></script>','')
   .replace('<script type="module" src="./app.js"></script>',()=>'<script type="module">'+demo.outputFiles[0].text.replace(/<\/script/gi,'<\\/script')+'</script>');
  review=review.replace('<head>','<head><meta http-equiv="Content-Security-Policy" content="connect-src \'none\'">');

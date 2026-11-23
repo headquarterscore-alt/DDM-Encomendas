@@ -175,11 +175,6 @@ nav [data-nav],.ticket .ref,.ticket-customer,.task-btns .btn,.global .btn,.list-
 .counter-ink{display:block;width:100%;height:auto;background:#fffefa;border-radius:6px}
 .counter-zoom{display:block;width:100%;padding:0;cursor:zoom-in}
 .counter-history-row{padding:16px 0;border-bottom:1px solid var(--line)}
-.review-banner{text-align:center;background:#e6f6f3;color:#114e63;padding:6px;font-weight:600}
-.review-banner .btn{min-height:56px}
-.review-banner [data-inbox]{max-width:640px;margin:8px auto;background:white;text-align:left;padding:16px;border-radius:8px}
-.review-banner [data-inbox] p{margin:8px 0}.review-banner [data-result]{display:block}
-body:has(.review-banner) #signOut,body:has(.review-banner) #installApp{display:none}
 @media(max-width:600px){.counter-form{padding:14px}.counter-schedule{gap:6px}}
 
 .budget-minimum{margin-top:8px;color:#a22e22}
