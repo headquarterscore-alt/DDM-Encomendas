@@ -262,7 +262,7 @@ function orderCard(o,n){
  const other=station==="barcas"?"bancada":"barcas";
  return `<article class="ticket ${cls[n]} ${station}-ticket${o.sheet?" counter-ticket":""}" data-order="${o.id}" aria-label="${esc(code(o.id)+" · "+(decodeNameDrawing(o.name)?"Nome manuscrito":o.name))}">${o.sheet?"":`<div class="ticket-top">${station==="barcas"?"":`<button class="ref" data-detail="${o.id}" aria-label="Abrir ${esc(code(o.id))}">${esc(code(o.id))}</button>`}${o.priority?`<span class="priority">${icon("flag",13)}Prioritária</span>`:""}${o.tasks[other]!==undefined?`<span class="mixed">Dois postos</span>`:""}</div>`}
  <button class="ticket-customer" data-detail="${o.id}"><strong>${displayName(o.name)}</strong></button>
- <div class="ticket-deadline"><strong>${esc(o.time)}</strong><span>${icon(modeIcon(o),18)}${esc(o.delivery)}</span></div>
+ ${o.sheet&&o.time==="Hora a combinar"?"":`<div class="ticket-deadline"><strong>${esc(o.time)}</strong><span>${icon(modeIcon(o),18)}${esc(o.delivery)}</span></div>`}
  <div class="ticket-products">${o.sheet?`<button class="counter-zoom" data-detail="${o.id}" aria-label="Ampliar folha">${sheetImage(o.sheet)}</button>`:lines.map((i,index)=>station==="barcas"?`<div class="boat-line"><strong>${fmtQty(i.budget)} €</strong><div class="boat-title"><h4>${esc(label(i))}${i.qty>1?` × ${fmtQty(i.qty)}`:""}</h4>${index===0?boatContact(o):""}</div>${i.people?`<small>${partyLabel(i.people)}</small>`:""}${i.note?`<p class="product-note">${esc(i.note)}</p>`:""}</div>`:`<div class="ticket-product"><div class="product-heading"><h4>${esc(label(i))}</h4><strong class="product-quantity">${fmtQty(i.qty)} <span>${esc(unit(i))}</span></strong></div><p class="product-cut">Corte: <strong>${esc(i.cut||"Não indicado")}</strong></p>${i.note?`<p class="product-note">${esc(i.note)}</p>`:""}</div>`).join("")}</div>
  ${o.sheet?"":station==="barcas"?avoidNote(o):contactActions(o)}
  ${o.note&&!o.sheet?`<p class="ticket-note">${esc(o.note)}</p>`:""}
@@ -719,7 +719,7 @@ document.addEventListener("submit",e=>{
  }
 });
 document.addEventListener("click",async e=>{
- const picker=e.target.closest("#quizForm .field,#qOrderForm .field,#counterForm .counter-bottom .field")?.querySelector('input[type="date"],input[type="time"]');
+ const picker=e.target.closest("#quizForm .field,#qOrderForm .field,#counterForm .counter-schedule .field")?.querySelector('input[type="date"],input[type="time"]');
  if(picker?.showPicker){try{picker.focus();picker.showPicker();e.preventDefault();return;}catch{/* Preferência nativa do navegador. */}}
  if(e.target===dialog){const rect=dialog.getBoundingClientRect();if(e.clientX<rect.left||e.clientX>rect.right||e.clientY<rect.top||e.clientY>rect.bottom){if(!busy&&!counter.isSaving())dialog.close();}return;}
  const b=e.target.closest("button");if(!b)return;

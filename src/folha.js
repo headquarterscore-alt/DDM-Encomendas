@@ -36,29 +36,34 @@ export function counterSheets({panel,dialog,openDialog,modalHead,esc,displayName
   const favourites=sheet.kind==="particular"?contacts.filter(c=>c.kind==="restaurante").slice(0,2):[];
   box.innerHTML=recentButtons(favourites,"data-contact")+recentButtons(list.slice(0,3),"data-contact")+(list.length>3?`<details><summary>Ver todos</summary>${recentButtons(list.slice(3),"data-contact")}</details>`:"");
  }
+ function dayLabel(){
+  if(!sheet.day||sheet.day===today())return "Hoje";
+  return sheet.day.split("-").reverse().slice(0,2).join("/");
+ }
  function draw(){
   const client=sheet.kind==="particular";
   const named=sheet.selected;
-  panel.innerHTML=modalHead("Peixe-Marisco","Folha de balcão")+`<form id="counterForm" class="counter-form">
-   <div class="counter-choices">${choice("particular","Cliente",client)}${choice("restaurante","Restaurante",!client)}</div>
-   ${named?`<div class="counter-selected"><strong>${displayName(sheet.name)}</strong><button type="button" class="btn" data-other>Alterar</button></div>`:
+  panel.innerHTML=modalHead("Peixe-Marisco",named?displayName(sheet.name):"Folha de balcão")+`<form id="counterForm" class="counter-form">
+   ${named?"":`<div class="counter-choices">${choice("particular","Cliente",client)}${choice("restaurante","Restaurante",!client)}</div>`}
+   ${named?"":
     `<div class="counter-recents" data-recents></div>
     ${!client||sheet.typed?`<label class="field">Nome ${client?"do cliente":"do restaurante"}<input id="counterName" maxlength="100" value="${esc(sheet.name)}" required></label>`:
     `<div class="counter-label">Nome do cliente <button type="button" class="text-action" data-type-name>Usar teclado</button></div>${pad("counterNamePad","Desenhar nome do cliente",700,95)}`}`}
-   <div class="counter-label">Pedido</div>${pad("counterOrderPad","Escrever o pedido",900,340)}
-   <div class="counter-bottom"><label class="field"><span id="sheetDayLabel">${sheet.day===today()?"Hoje":"Dia de levantamento"}</span><input type="date" aria-label="Dia de levantamento" id="sheetDay" required min="${today()}" max="${lastDay()}" value="${esc(sheet.day)}"></label>
-   <label class="field"><span id="sheetTimeLabel">${sheet.time?"Hora de levantamento":"Hora a combinar"}</span><input type="time" id="sheetTime" aria-label="Hora de levantamento" value="${esc(sheet.time)}"></label>
-   <button class="btn primary" type="submit">Guardar</button></div>
-   <p data-sheet-message role="status"></p><button type="button" class="text-action" data-catalog>Usar catálogo</button></form>`;
+   <div class="counter-schedule"><label class="field"><span id="sheetDayLabel">${dayLabel()}</span><input type="date" aria-label="Dia de levantamento" id="sheetDay" required min="${today()}" max="${lastDay()}" value="${esc(sheet.day)}"></label>
+   <label class="field"><span id="sheetTimeLabel">${esc(sheet.time)||"+ Hora"}</span><input type="time" id="sheetTime" aria-label="Hora de levantamento" value="${esc(sheet.time)}"></label>
+   ${named?'<button type="button" class="text-action counter-change" data-other>Alterar contacto</button>':""}</div>
+   ${pad("counterOrderPad","Escrever o pedido",900,460)}
+   <p data-sheet-message role="status"></p>
+   <div class="counter-bottom"><button type="button" class="text-action" data-catalog>Usar catálogo</button><button class="btn primary" type="submit">Guardar</button></div></form>`;
   updateRecents();
   const namePad=panel.querySelector('#counterNamePad');
   if(namePad)openPad(namePad,decodeNameDrawing(sheet.name),png=>{sheet.name=png?encodeNameDrawing(png):"";persist();},{undo:true});
-  openPad(panel.querySelector('#counterOrderPad'),sheet.drawing,png=>{sheet.drawing=png;persist();},{undo:true});
+  openPad(panel.querySelector('#counterOrderPad'),sheet.drawing,png=>{sheet.drawing=png;persist();},{undo:true,extend:true,onLimit:message});
   const form=panel.querySelector('#counterForm');
   form.oninput=e=>{
    if(e.target.id==="counterName")sheet.name=e.target.value;
-   if(e.target.id==="sheetDay"){sheet.day=e.target.value;form.querySelector("#sheetDayLabel").textContent=sheet.day===today()?"Hoje":"Dia de levantamento";}
-   if(e.target.id==="sheetTime"){sheet.time=e.target.value;form.querySelector("#sheetTimeLabel").textContent=sheet.time?"Hora de levantamento":"Hora a combinar";}
+   if(e.target.id==="sheetDay"){sheet.day=e.target.value;form.querySelector("#sheetDayLabel").textContent=dayLabel();}
+   if(e.target.id==="sheetTime"){sheet.time=e.target.value;form.querySelector("#sheetTimeLabel").textContent=sheet.time||"+ Hora";}
    persist();
   };
   form.onclick=e=>{

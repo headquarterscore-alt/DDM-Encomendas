@@ -1,6 +1,16 @@
 // Only injected into the isolated review page. All reads and writes stay in this browser.
 const storageKey="ddm-preview-folhas-v1";
 const demoContact={contact_id:"2462c668-63fd-4077-b5d4-6d0beb42cf19",kind:"restaurante",name:"Mar Azul"};
+export const sampleText="Boa tarde! Para hoje às 18h, queria 4 robalos de 1 kg cada, amanhados.";
+export function acceptSample(id,day){
+ const rows=JSON.parse(localStorage.getItem(storageKey)||"[]");
+ if(rows.some(o=>o.id===id))return;
+ rows.unshift({id,ref:"TESTE-"+(rows.length+1),customer_type:"restaurante",customer_name:demoContact.name,
+  source:"cliente",priority:"normal",fulfilment:"recolha",status:"ativa",history_version:0,business_date:day,scheduled_time:"18:00",
+  notes:sampleText,order_items:[{product:"Robalo",category:"peixe_fresco",quantity:4,unit:"kg",cut:"amanhado",notes:"4 peças · cerca de 1 kg por peça",position:0}],
+  station_tasks:[{id:crypto.randomUUID(),station:"bancada",status:"por_iniciar",version:0}]});
+ localStorage.setItem(storageKey,JSON.stringify(rows));
+}
 export async function fetch(url,options={}){
  const endpoint=new URL(url),path=endpoint.pathname.split("/").pop(),params=endpoint.searchParams;
  const rows=JSON.parse(localStorage.getItem(storageKey)||"[]");
@@ -9,7 +19,7 @@ export async function fetch(url,options={}){
  const save=()=>localStorage.setItem(storageKey,JSON.stringify(rows));
  const eq=key=>params.get(key)?.replace(/^eq\./,"");
  if(path==="counter_contacts"){
-  const contacts=new Map(rows.map(o=>[o.counter_contact_id,{contact_id:o.counter_contact_id,kind:o.customer_type,name:o.customer_name}]));
+  const contacts=new Map(rows.filter(o=>o.counter_contact_id).map(o=>[o.counter_contact_id,{contact_id:o.counter_contact_id,kind:o.customer_type,name:o.customer_name}]));
   if(!contacts.has(demoContact.contact_id))contacts.set(demoContact.contact_id,demoContact);
   return reply([...contacts.values()].slice(Number(params.get("offset")),Number(params.get("offset"))+100));
  }
