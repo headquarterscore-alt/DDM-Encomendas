@@ -1,12 +1,6 @@
 .review-banner{padding:6px;text-align:center;font-size:14px;color:#274d58;background:#eef5f4}
 body:has(.review-banner) #signOut,body:has(.review-banner) #installApp{display:none}
-.incoming{margin:0 0 22px}
-.incoming-heading,.incoming-heading h2,.incoming-meta,.incoming-actions,.incoming-title{display:flex;align-items:center}
-.incoming-heading{justify-content:space-between;gap:12px;margin-bottom:10px}
-.incoming-heading h2{gap:9px;font-size:24px;letter-spacing:-.6px}
-.incoming-heading .btn{min-height:56px}
-.incoming-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
-.incoming-card{display:flex;flex-direction:column;min-width:0;background:white;border:1px solid #cfdbde;border-top:3px solid #1b6976;border-radius:10px;padding:14px 14px 12px;box-shadow:0 1px 3px #1236450c}
+.incoming-card{container-type:inline-size;display:flex;flex-direction:column;min-width:0;background:white;border:1px solid #cfdbde;border-top:3px solid #1b6976;border-radius:10px;padding:14px 14px 12px;box-shadow:0 1px 3px #1236450c}
 .incoming-meta{justify-content:space-between;gap:8px;margin-bottom:8px;color:#516976;font-size:13px}
 .incoming-meta span{background:#e6f4f2;color:#165963;font-weight:700;border-radius:5px;padding:3px 7px}
 .incoming-title{justify-content:space-between;gap:8px}
@@ -26,8 +20,8 @@ body:has(.review-banner) #signOut,body:has(.review-banner) #installApp{display:n
 .incoming-actions [data-decision="contact"]{background:#155d9c}
 .incoming-actions [data-decision="reject"]{background:#aa3634}
 .incoming-actions button:disabled{opacity:.6}
-.incoming [data-result]:not(:empty){font-size:15px;margin-bottom:8px;color:#245f59}
-@media(max-width:1450px){.incoming-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
-@media(max-width:1100px){.incoming-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media(max-width:760px){.incoming-grid{grid-template-columns:1fr}}
 @media(max-width:390px){.incoming-actions i{display:none}}
+
+.preview-connection,.incoming-meta,.incoming-title{display:flex;align-items:center}.preview-connection{gap:8px}.station-header .preview-connection .sync{margin:0}
+@media(max-width:900px){.preview-connection{margin-right:auto}}
+@container(max-width:290px){.incoming-actions i{display:none}.incoming-actions button{font-size:14px}}

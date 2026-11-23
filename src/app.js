@@ -1,6 +1,7 @@
 import {counterSheets,sheetImage} from './folha.js';
 import {teamAuth} from './team-auth.js';
 import {decodeNameDrawing,encodeNameDrawing,openPad} from './handwriting.js';
+const smsPreview=typeof simulatedOrders==="undefined"?null:simulatedOrders;
 const stations = {bancada:"Peixe-Marisco",barcas:"Barcas"};
 const states = ["Por preparar","Por preparar","Prontas"];
 const preparationStates=[0,2];
@@ -213,7 +214,9 @@ function header(){
  const title=client?"Cliente":list?"Histórico":stations[station];
  const boat=!list&&station==="barcas";
  const newOrderLabel=boat?"Encomendar barca":"Nova encomenda";
- return `<div class="pagehead station-header">${focusMode?"":`<h1>${title}</h1>`}<div class="header-date">${icon("calendar",30)}<span data-today></span></div><div class="header-clock" aria-label="Hora atual em Lisboa">${icon("clock",34)}<time data-clock></time></div><div class="head-actions"><span class="sync" role="status"></span>${!client&&!list?`<button class="btn square" title="${focusMode?"Sair do modo posto":"Modo posto em ecrã inteiro"}" aria-label="${focusMode?"Sair do modo posto":"Modo posto em ecrã inteiro"}" data-act="focus">${icon(focusMode?"shrink":"expand",30)}</button>`:""}${client?"":`<button type="button" class="btn primary new-order" data-act="${boat?"boat-order":"new"}" aria-label="${newOrderLabel}" title="${newOrderLabel}">${icon("plus",36)}</button>`}</div></div>`;
+ const sync='<span class="sync" role="status"></span>';
+ const connection=smsPreview&&!client&&!list?`<div class="preview-connection">${sync}${button("","Simular SMS","simulate-sms")}</div>`:sync;
+ return `<div class="pagehead station-header">${focusMode?"":`<h1>${title}</h1>`}<div class="header-date">${icon("calendar",30)}<span data-today></span></div><div class="header-clock" aria-label="Hora atual em Lisboa">${icon("clock",34)}<time data-clock></time></div><div class="head-actions">${connection}${!client&&!list?`<button class="btn square" title="${focusMode?"Sair do modo posto":"Modo posto em ecrã inteiro"}" aria-label="${focusMode?"Sair do modo posto":"Modo posto em ecrã inteiro"}" data-act="focus">${icon(focusMode?"shrink":"expand",30)}</button>`:""}${client?"":`<button type="button" class="btn primary new-order" data-act="${boat?"boat-order":"new"}" aria-label="${newOrderLabel}" title="${newOrderLabel}">${icon("plus",36)}</button>`}</div></div>`;
 }
 function updateClock(){
  const now=new Date();
@@ -232,7 +235,7 @@ function toolbar(total){
   const value=index===0?"all":statusKeys[preparationStates[index-1]];
   return `<button class="btn" data-filter="${value}" aria-pressed="${filter===value}">${label}</button>`;
  }).join("");
- return `<div class="queuehead"><div class="queue-title"><h2>${queue?"Fila de preparação":"Histórico"}</h2><span class="total">${total}</span></div><div class="tools">${datePicker()}</div></div>${queue?`<div class="queue-filters" role="group" aria-label="Estado da preparação">${filters}</div>`:""}`;
+ return `<div class="queuehead"><div class="queue-title"><h2>${queue?"Encomendas":"Histórico"}</h2><span class="total">${total}</span></div><div class="tools">${datePicker()}</div></div>${queue?`<div class="queue-filters" role="group" aria-label="Estado da preparação">${filters}</div>`:""}`;
 }
 const handoffLabel=o=>o.delivery==="Entrega"?"Confirmar entrega":"Confirmar levantamento";
 function avoidNote(o){
@@ -273,7 +276,7 @@ function orderCard(o,n){
  <p class="card-save" data-saving="${o.id}"></p></article>`;
 }
 function empty(text){return `<div class="empty">${icon("bando",24)}<span>${text}</span></div>`;}
-function boardContent(){
+function boardContent(pending=smsPreview?.cardsFor(day)||[]){
  const shown=orders.filter(o=>!o.cancelled && (!o.handed||canUndo(o)) && o.tasks[station]!==undefined).sort(byTime);
  const lanes=preparationStates.map(n=>{
   const title=states[n];
@@ -282,9 +285,11 @@ function boardContent(){
   let message="Sem encomendas";
   if(!loaded)message=networkProblem?"Sem ligação. Verifica a ligação à internet.":"A ligar ao posto…";
   if(excluded)message="Fora do filtro";
+  const cards=row.map(o=>orderCard(o,n));
+  if(n===0&&!excluded)cards.unshift(...pending);
   return `<section class="lane ${cls[n]}${excluded?" filtered-out":""}">
-   <div class="lane-head"><div><span class="state-dot"></span><h3>${title}</h3></div><span class="lane-count">${row.length}</span></div>
-   <div class="lane-body">${row.map(o=>orderCard(o,n)).join("")||empty(message)}</div>
+   <div class="lane-head"><div><span class="state-dot"></span><h3>${title}</h3></div><span class="lane-count">${cards.length}</span></div>
+   <div class="lane-body">${cards.join("")||empty(message)}</div>
   </section>`;
  });
  return `<div class="board">${lanes.join("")}</div>`;
@@ -299,8 +304,9 @@ function render(){
  if(!teamSession)return;
  document.title=(page==="encomendas"?"Encomendas":page==="cliente"?"Cliente":"Histórico")+" · Delicias do Mar";
  document.querySelectorAll("[data-nav]").forEach(a=>{a.classList.toggle("active",a.dataset.nav===page);if(a.dataset.nav===page)a.setAttribute("aria-current","page");else a.removeAttribute("aria-current");});
- const total=page==="encomendas"?orders.filter(o=>!o.cancelled&&!o.handed&&o.tasks[station]!==undefined).length:orders.length;
- main.innerHTML=header()+(page==="cliente"?clientContent():(page==="encomendas"&&!focusMode?stationCards():"")+toolbar(total)+`<div id="results">${page==="encomendas"?boardContent():listContent()}</div>`)+`<footer><span>Delicias do Mar <b>·</b> Loulé</span><span>${icon("waves",19)} Central de encomendas</span></footer>`;
+ const pending=page==="encomendas"?smsPreview?.cardsFor(day)||[]:[];
+ const total=page==="encomendas"?pending.length+orders.filter(o=>!o.cancelled&&!o.handed&&o.tasks[station]!==undefined).length:orders.length;
+ main.innerHTML=header()+(page==="cliente"?clientContent():(page==="encomendas"&&!focusMode?stationCards():"")+toolbar(total)+`<div id="results">${page==="encomendas"?boardContent(pending):listContent()}</div>`)+`<footer><span>Delicias do Mar <b>·</b> Loulé</span><span>${icon("waves",19)} Central de encomendas</span></footer>`;
  updateClock();renderSync();
 }
 function rerenderResults(){const el=$("#results");if(el)el.innerHTML=page==="encomendas"?boardContent():listContent();renderSync();}
@@ -723,6 +729,17 @@ document.addEventListener("click",async e=>{
  if(picker?.showPicker){try{picker.focus();picker.showPicker();e.preventDefault();return;}catch{/* Preferência nativa do navegador. */}}
  if(e.target===dialog){const rect=dialog.getBoundingClientRect();if(e.clientX<rect.left||e.clientX>rect.right||e.clientY<rect.top||e.clientY>rect.bottom){if(!busy&&!counter.isSaving())dialog.close();}return;}
  const b=e.target.closest("button");if(!b)return;
+ if(smsPreview&&b.dataset.act==="simulate-sms"){
+  smsPreview.simulate();if(filter==="pronta")filter="all";
+  if(day!==dayNow())setDay(dayNow());else render();
+  return;
+ }
+ if(smsPreview&&b.dataset.decision){
+  const result=smsPreview.decide(b.closest("[data-incoming-id]")?.dataset.incomingId,b.dataset.decision);
+  if(result?.message)notice(result.message);
+  if(result?.station){selectStation(result.station);await sync();}else render();
+  return;
+ }
  if(b.dataset.station){selectStation(b.dataset.station);return;}
  if(b.dataset.filter){filter=b.dataset.filter;render();document.querySelector(`[data-filter="${filter}"]`).focus();return;}
  if(b.dataset.list){listState=b.dataset.list;rerenderResults();return;}
@@ -782,6 +799,7 @@ const counter=counterSheets({panel,dialog,openDialog,modalHead,esc,displayName,r
   updateOrder(o);filter="all";render();notice("Folha guardada.");void sync();
  }
 });
+smsPreview?.onChange(()=>{if(page==="encomendas")render();});
 const auth=teamAuth(base,publicKey,showSession);
 setInterval(()=>{if(!document.hidden&&!busy)sync();},3500);
 setInterval(()=>{updateClock();refreshDeadlines();},1000);

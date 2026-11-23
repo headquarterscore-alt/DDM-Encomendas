@@ -38,7 +38,7 @@ for (const file of ['app.js', 'install.js']) {
   const tag = '<script type="module" src="./' + file + '"></script>';
   must(page, tag);
   const script = file === 'app.js'
-    ? (await build({entryPoints:[resolve(src,file)],bundle:true,platform:'browser',format:'esm',minify:true,write:false})).outputFiles[0].text
+    ? (await build({entryPoints:[resolve(src,file)],bundle:true,platform:'browser',format:'esm',minify:true,write:false,define:{simulatedOrders:'undefined'}})).outputFiles[0].text
     : read(file);
   if(file==='app.js') writeFileSync(resolve(dist,file),script);
   page = page.replace(tag, () => '<script type="module">' + script.replace(/<\/script/gi, '<\\/script') + '</script>');
@@ -49,7 +49,7 @@ let branch=process.env.WORKERS_CI_BRANCH||process.env.CF_PAGES_BRANCH;
 if(!branch){try{branch=execFileSync('git',['branch','--show-current'],{cwd:project,encoding:'utf8'}).trim();}catch{}}
 if(branch==='feat/folha-balcao'||process.argv.includes('--preview-folha')){
  const demo=await build({entryPoints:[resolve(src,'app.js')],bundle:true,platform:'browser',format:'esm',minify:true,write:false,
-  inject:[resolve(project,'preview/folha-store.js')],
+  inject:[resolve(project,'preview/folha-store.js'),resolve(project,'preview/folha-session.js')],
   plugins:[{name:'isolated-session',setup(builder){
    builder.onResolve({filter:/team-auth\.js$/},()=>({path:resolve(project,'preview/folha-session.js')}));
   }}]});
