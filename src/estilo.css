@@ -145,6 +145,38 @@ nav [data-nav],.ticket .ref,.ticket-customer,.task-btns .btn,.global .btn,.list-
 .name-pad button{margin-top:8px}
 .name-drawing{display:block;width:min(100%,270px);height:auto;object-fit:contain}
 .table-row .name-drawing{max-height:50px}
+
+/* Folha manuscrita do balcão */
+.counter-form{padding:18px 24px;display:grid;gap:12px}
+.counter-choices,.counter-selected,.counter-label,.counter-recents{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.counter-choices .btn{flex:1}.counter-form .btn,.counter-history-row .btn,[data-directory] .btn{min-height:56px}
+.counter-choices [aria-pressed=true]{background:#e2f5f3;border-color:#287e83;color:#103f52}
+.counter-recents:empty{display:none}.counter-recents .name-drawing,.counter-selected .name-drawing{max-width:145px;max-height:48px}
+.counter-label,.counter-selected{justify-content:space-between;font-weight:650}
+.counter-pad{position:relative;border-radius:9px;border:1px solid #c8d5d9;overflow:hidden;background:repeating-linear-gradient(#fffefa 0 37px,#dfebeb 38px,#fffefa 39px)}
+.counter-pad canvas{width:100%;height:auto;display:block;touch-action:none;cursor:crosshair}
+.counter-pad .pad-undo{position:absolute;right:4px;top:4px;width:56px;font-size:24px;background:#ffffffeb}.counter-pad .pad-undo:disabled{visibility:hidden}
+.counter-schedule,.counter-bottom{display:flex;align-items:center;gap:10px}
+.counter-schedule .field{display:grid;place-items:center;position:relative;min-width:72px;height:56px;margin:0;border:1px solid var(--line);border-radius:8px;color:var(--ink);padding:0 8px}
+.counter-schedule .field input{position:absolute;inset:0;opacity:0;width:100%;height:100%;margin:0;cursor:pointer}
+.counter-schedule .field:focus-within{outline:2px solid #287e83}
+.counter-change,.counter-bottom .primary{margin-left:auto}.counter-bottom .primary{min-width:45%}
+.counter-form [data-sheet-message]:not(:empty){position:sticky;bottom:6px;background:white;padding:8px}
+.counter-bottom .btn.primary{background:#114e63;border-color:#114e63}
+.counter-form [data-sheet-message]:empty{display:none}.counter-form [data-sheet-message]{color:#8a3e0a}
+.counter-form .text-action{min-height:44px;justify-self:start;color:#155a70;text-decoration:underline}
+.counter-ticket{display:flex;flex-direction:column;align-items:stretch;border-top:3px solid #46a8a6}
+.bancada-ticket .ticket-deadline{padding:0;margin:0 0 4px;background:transparent;gap:8px;justify-content:flex-start}
+.bancada-ticket .ticket-customer{min-height:44px}
+.bancada-ticket .ticket-deadline strong{font-size:16px;color:var(--muted);letter-spacing:0;font-weight:600}
+.counter-ticket .ticket-products{margin:2px 0 10px}
+.counter-ticket .ticket-customer strong{font-size:26px}
+.counter-ticket .ticket-deadline span{display:none}
+.counter-ink{display:block;width:100%;height:auto;background:#fffefa;border-radius:6px}
+.counter-zoom{display:block;width:100%;padding:0;cursor:zoom-in}
+.counter-history-row{padding:16px 0;border-bottom:1px solid var(--line)}
+@media(max-width:600px){.counter-form{padding:14px}.counter-schedule{gap:6px}}
+
 .budget-minimum{margin-top:8px;color:#a22e22}
 .boat-title{display:flex;flex-wrap:wrap;align-items:start;gap:4px 14px;min-width:0}
 .boat-contact{display:grid;justify-items:start;align-content:start;flex:none}
