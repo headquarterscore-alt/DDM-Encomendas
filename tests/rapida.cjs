@@ -7,6 +7,19 @@ module.exports=async function testQuick(browser,url,base){
  const rows=[],submitted=[];
  await context.route(base+'/**',async route=>{
   const path=new URL(route.request().url());
+  if(path.pathname.endsWith('/rpc/counter_contacts')){
+   const list=rows.filter(o=>o.counter_contact_id).map(o=>({name:o.customer_name,contact_id:o.counter_contact_id,kind:o.customer_type}));
+   return route.fulfill({json:[...new Map(list.map(c=>[c.contact_id,c])).values()]});
+  }
+  if(path.pathname.endsWith('/rpc/create_counter_sheet')){
+   const {payload:p}=route.request().postDataJSON();
+   const id='folha-'+rows.length;
+   rows.push({id,ref:id,client_token:p.client_token,counter_sheet:p.drawing,counter_contact_id:p.contact_id,
+    counter_time_unset:!p.time,scheduled_time:p.time||'23:59',customer_name:p.name,customer_type:p.kind,fulfilment:'recolha',
+    business_date:p.day,status:'ativa',priority:'normal',order_items:[{category:'peixe_fresco',product:'Folha de balcão',unit:'un',quantity:1}],
+    station_tasks:[{station:'bancada',status:'por_iniciar',version:0}]});
+   return route.fulfill({json:{id}});
+  }
   if(path.pathname.endsWith('/rpc/create_order')){
    const {payload}=route.request().postDataJSON();
    submitted.push(payload);
@@ -16,7 +29,8 @@ module.exports=async function testQuick(browser,url,base){
    return route.fulfill({json:{id}});
   }
   const id=path.searchParams.get('id')?.slice(3);
-  return route.fulfill({json:id?rows.filter(o=>o.id===id):rows});
+  const contact=path.searchParams.get('counter_contact_id')?.slice(3);
+  return route.fulfill({json:id?rows.filter(o=>o.id===id):contact?rows.filter(o=>o.counter_contact_id===contact):rows});
  });
  const p=await context.newPage(),button=name=>p.getByRole('button',{name,exact:true}),click=name=>button(name).click();
  const today=new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Lisbon'}).format(new Date());
@@ -30,7 +44,7 @@ module.exports=async function testQuick(browser,url,base){
   assert.ok(box.width>=64&&box.height>=64,'o botão tem de ser grande');
 
   // Formulário rápido: dois ecrãs, sem o questionário.
-  await plus.click();
+  await plus.click();await click('Usar catálogo');
   assert.equal(await p.locator('#quizForm').count(),0);
   await p.getByText('1 Artigos').waitFor();
   if(process.argv.includes('--update-images'))await p.locator('#dialog').screenshot({path:require('node:path').resolve(__dirname,'../docs/postos/artigos.png')});
@@ -39,7 +53,7 @@ module.exports=async function testQuick(browser,url,base){
   await p.getByLabel('Número de peixes').fill('4');
   await p.getByLabel('Peso aproximado por peixe (kg)').fill('1');
   // Um artigo ainda em edição também tem de sobreviver ao reload.
-  await p.reload();await plus.click();
+  await p.reload();await plus.click();await click('Usar catálogo');
   assert.equal(await p.getByLabel('Número de peixes').inputValue(),'4');
   await click('Adicionar à encomenda');
   await click('Gamba da costa');
@@ -50,7 +64,7 @@ module.exports=async function testQuick(browser,url,base){
   await p.getByLabel('Hora pretendida').fill('23:59');
   await p.getByLabel('Encomenda prioritária').check();
   const saved=await p.evaluate(()=>JSON.parse(localStorage.getItem(Object.keys(localStorage).find(k=>k.endsWith('-Rapida')))));
-  await p.reload();await plus.click();
+  await p.reload();await plus.click();await click('Usar catálogo');
   assert.equal(await p.getByLabel('Nome do cliente ou restaurante').inputValue(),'TESTE RAPIDA');
   assert.equal(await p.getByLabel('Encomenda prioritária').isChecked(),true);
   assert.equal(saved.quick.items.length,2);
@@ -82,7 +96,7 @@ module.exports=async function testQuick(browser,url,base){
   await click('Concluir');
 
   // Segunda encomenda, de entrega, com telemóvel estrangeiro e uma barca.
-  await plus.click();
+  await plus.click();await click('Usar catálogo');
   await p.getByText('Todos os artigos',{exact:true}).click();
   await click('Barcas');
   await click('Continuar');
@@ -100,6 +114,38 @@ module.exports=async function testQuick(browser,url,base){
   assert.equal(second.items[0].category,'barcas');
   assert.equal(Object.hasOwn(second,'party_size'),false);
   await click('Concluir');
+
+  async function writeOn(selector){
+   const rect=await p.locator(selector).boundingBox();
+   await p.mouse.move(rect.x+20,rect.y+20);await p.mouse.down();
+   await p.mouse.move(rect.x+95,rect.y+38,{steps:8});await p.mouse.up();
+  }
+  await plus.click();
+  await click('Restaurante');
+  await p.getByLabel('Nome do restaurante').fill('Mar Azul');
+  await writeOn('#counterOrderPad canvas');
+  await p.locator('#counterOrderPad button').click();await click('Guardar');
+  assert.match(await p.locator('[data-sheet-message]').innerText(),/Escreva o pedido/);
+  await writeOn('#counterOrderPad canvas');
+  await p.reload();await plus.click();
+  assert.equal(await p.getByLabel('Nome do restaurante').inputValue(),'Mar Azul');
+  await click('Guardar');await p.locator('#counterForm').waitFor({state:'hidden'});
+  const firstSheet=rows.find(o=>o.counter_sheet);
+  const card=p.locator('[data-order="'+firstSheet.id+'"]');
+  assert.equal(await card.locator('.ticket-deadline strong').innerText(),'Hora a combinar');
+  assert.equal(await card.locator('.counter-ink').getAttribute('src'),firstSheet.counter_sheet);
+  await card.getByRole('button',{name:'Ampliar folha'}).click();await p.locator('#dialog .counter-ink').waitFor();await click('Fechar');
+  await plus.click();await p.locator('[data-contact]').filter({hasText:'Mar Azul'}).click();await writeOn('#counterOrderPad canvas');
+  await p.getByLabel('Hora de levantamento').fill('18:00');await click('Guardar');
+  await p.locator('#counterForm').waitFor({state:'hidden'});
+  assert.equal(rows.filter(o=>o.counter_contact_id===firstSheet.counter_contact_id).length,2);
+  await plus.click();await writeOn('#counterNamePad canvas');await writeOn('#counterOrderPad canvas');await click('Guardar');
+  await p.locator('#counterForm').waitFor({state:'hidden'});
+  assert.ok(rows.at(-1).customer_name.startsWith('ddm-ink:'));
+  await p.goto(url+'/#historico');await click('Clientes e restaurantes');await click('Mar Azul');
+  await p.locator('.counter-history-row').first().waitFor();assert.equal(await p.locator('.counter-history-row').count(),2);
+  await click('Fechar');
+  console.log('PASS: folha manuscrita, rascunho, nome desenhado, restaurante habitual, hora opcional e histórico');
 
   // O separador Cliente continua a abrir o questionário de 6 passos.
   await p.goto(url+'/#cliente');

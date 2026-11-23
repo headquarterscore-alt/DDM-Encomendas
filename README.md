@@ -41,7 +41,9 @@ As ações ficam bloqueadas durante a gravação ou sem ligação. A confirmaç�
 
 ## Duas formas de encomendar
 
-Em **Peixe-Marisco**, **Nova encomenda** abre os artigos. Robalo e Dourada abrem à peça, com número de peixes e peso aproximado por peixe. Gamba da costa abre ao quilo. **Todos os artigos** dá acesso às outras categorias. A equipa também pode escrever o nome de um produto. O segundo ecrã recolhe o cliente, o horário e os dados do levantamento ou entrega.
+Em **Peixe-Marisco**, o **+** abre a folha de balcão. A equipa escolhe um contacto habitual ou identifica um cliente ou restaurante novo, escreve o pedido com o dedo ou a caneta e guarda. O dia inicial é hoje e a hora é opcional. O cartão permite ampliar o manuscrito e marcar a preparação como pronta. Em **Histórico → Clientes e restaurantes** estão as folhas desse contacto, incluindo as de outros dias. A gravação requer a migração `005_folha_balcao.sql`. Na pré-visualização da branch, `experimentar.html` usa pedidos fictícios guardados apenas no navegador.
+
+A opção **Usar catálogo** abre o formulário por artigos. Robalo e Dourada abrem à peça, com número de peixes e peso aproximado por peixe. Gamba da costa abre ao quilo. **Todos os artigos** dá acesso às outras categorias. A equipa também pode escrever o nome de um produto. O segundo ecrã recolhe o cliente, o horário e os dados do levantamento ou entrega.
 
 Em **Barcas**, **Encomendar barca** abre o questionário para levantamento. O número de pessoas é opcional. O valor aparece acima das fotografias e começa em 20 € por pessoa, com um mínimo de 50 €. O deslizador vai de 0 € a 400 €, em incrementos de 10 €, e realça a barca correspondente. O mínimo para confirmar a encomenda é 50 €. A média começa nos 100 € e a grande nos 200 €. O nome é desenhado à mão e aparece no resumo, na fila e no Histórico. As encomendas anteriores com nome escrito continuam a mostrar texto. O telemóvel é opcional.
 

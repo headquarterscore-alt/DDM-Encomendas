@@ -11,12 +11,14 @@ export function encodeNameDrawing(png) {
  return namePrefix + png.slice(pngPrefix.length);
 }
 
-export function openPad(host, drawing, onChange) {
+export function openPad(host, drawing, onChange, {undo=false}={}) {
  const canvas = host.querySelector("canvas");
  const clear = host.querySelector("button");
  const context = canvas.getContext("2d");
  const brushRadius = 2.5;
  let activePointer = null;
+ const history=[];
+ let hasInk=Boolean(drawing);
  let previous;
  let loading = Boolean(drawing);
  clear.disabled = true;
@@ -30,12 +32,19 @@ export function openPad(host, drawing, onChange) {
   saved.onload = () => {
    context.drawImage(saved, 0, 0, canvas.width, canvas.height);
    loading = false;
-   clear.disabled = false;
+   clear.disabled = undo;
   };
   saved.onerror = () => { loading = false; clear.disabled = false; };
   saved.src = drawing;
  }
  clear.onclick = () => {
+  if(undo){
+   const last=history.pop();if(!last)return;
+   context.putImageData(last.image,0,0);hasInk=last.hasInk;
+   clear.disabled=!history.length;
+   onChange(hasInk?canvas.toDataURL("image/png"):"");
+   return;
+  }
   context.clearRect(0, 0, canvas.width, canvas.height);
   clear.disabled = true;
   onChange("");
@@ -49,6 +58,11 @@ export function openPad(host, drawing, onChange) {
  }
  canvas.onpointerdown = event => {
   if(loading || activePointer !== null || !event.isPrimary || event.button !== 0) return;
+  if(undo){
+   if(history.length===16)history.shift();
+   history.push({image:context.getImageData(0,0,canvas.width,canvas.height),hasInk});
+   hasInk=true;
+  }
   activePointer = event.pointerId;
   canvas.setPointerCapture(activePointer);
   previous = point(event);
